@@ -12,7 +12,7 @@ AOW3     = $(RESULTS_DIR)/aow3_capacity.parquet
 R_OUTPUTS = $(BOUNDS) $(URGENCY) $(GRAPE) $(AOW1) $(AOW2) $(AOW3)
 
 # QMD outputs
-QMD_OUTPUTS = gates_analysis.pdf sfp_report_REFACTOR.pdf
+QMD_OUTPUTS = country_analysis.pdf sfp_report_REFACTOR.pdf
 
 # Default target
 all: $(R_OUTPUTS) $(QMD_OUTPUTS)
@@ -36,19 +36,13 @@ $(AOW2): 05_preprocess_aow2.r $(AOW1)
 $(AOW3): 06_preprocess_aow3.r $(AOW2)
 	Rscript $< -o $@ >& >/dev/null
 
-# # Render QMDs (depends on all processed data)
-# %.pdf: %.qmd $(R_OUTPUTS)
-# 	quarto render $<
-#
-gates_analysis.pdf: gates_analysis.qmd $(R_OUTPUTS)
+country_analysis.pdf: country_analysis.qmd $(R_OUTPUTS)
 	quarto render $<
 
 sfp_report_REFACTOR.pdf: sfp_report_REFACTOR.qmd $(R_OUTPUTS)
 	quarto render $<
 
 # Utility
-reports:
-	@$(MAKE) -B $(QMD_OUTPUTS)
 clean:
 	rm -f $(RESULTS_DIR)/*.parquet *.pdf
 

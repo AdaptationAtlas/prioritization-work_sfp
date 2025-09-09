@@ -3,8 +3,8 @@ title: "SFP Priority Analysis"
 format:
   typst:
     margin:
-      x: 0.5cm
-      y: 0.5cm
+      x: 1cm
+      y: 1cm
     toc: true
     toc-depth: 2
 

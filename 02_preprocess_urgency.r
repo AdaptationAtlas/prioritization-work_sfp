@@ -235,20 +235,10 @@ process_urgency_data <- function(
   #   na.rm = TRUE
   # )
 
-  # merged_df$composite_index_geo <- rowGeometricMeans(
-  #   merged_df[, c("vuln_index_geo", "expo_index_geo")],
-  #   na.rm = TRUE
-  # )
-
   merged_df$composite_index <- rowMeans(
     merged_df[, c("vuln_index_norm", "expo_index_norm")],
     na.rm = TRUE
   )
-
-  # merged_df$composite_index_geo3 <- rowGeometricMeans(
-  #   merged_df[, c("vuln_index", "expo_index")],
-  #   na.rm = TRUE
-  # )
 
   # Add geographic and land use information
   merged_df <- add_geographic_info(merged_df)

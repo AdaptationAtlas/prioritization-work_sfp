@@ -13,6 +13,10 @@ execute:
   warning: false
 ---
 
+```{=typst}
+#set page(numbering: none)
+```
+
 ## Introduction
 
 For each country, we classify risk-related variables into exposure and
@@ -125,17 +129,17 @@ urgency_sf <- merge(a0_sf_simple, urgency_ranks, by = "gaul0_code") |>
       case_when(
         bi_class %in% c("1-1", "1-2", "1-3") ~ "Low Priority",
         bi_class %in% c("2-1", "2-2") ~ "Moderate Priority",
-        bi_class == "2-3" ~ "Growth Opportunity Zones",
-        bi_class == "3-1" ~ "Underserved Communities",
-        bi_class == "3-2" ~ "Resilience Building Areas",
+        bi_class == "2-3" ~ "Emerging Pressure Zones",
+        bi_class == "3-1" ~ "Underserved Opportunity Hotspots",
+        bi_class == "3-2" ~ "Strained Systems",
         bi_class == "3-3" ~ "High-Impact Priority Hubs"
       ),
       levels = c(
         "Low Priority",
         "Moderate Priority",
-        "Growth Opportunity Zones",
-        "Underserved Communities",
-        "Resilience Building Areas",
+        "Emerging Pressure Zones",
+        "Underserved Opportunity Hotspots",
+        "Strained Systems",
         "High-Impact Priority Hubs"
       )
     )
@@ -157,9 +161,9 @@ ggplot() +
     values = c(
       "Low Priority" = "#D5D6D2",
       "Moderate Priority" = "#A7C080",
-      "Growth Opportunity Zones" = "#DFAF8F",
-      "Underserved Communities" = "#E67E80",
-      "Resilience Building Areas" = "#B48EAD",
+      "Emerging Pressure Zones" = "#DFAF8F",
+      "Underserved Opportunity Hotspots" = "#E67E80",
+      "Strained Systems" = "#B48EAD",
       "High-Impact Priority Hubs" = "#7FBBB3"
     )
   )
@@ -172,7 +176,8 @@ ggplot() +
 Populations face acute social and economic challenges. A low production and
 population density means these groups may be overlooked in support and
 investment, but also may offer opportunities to address production gaps and
-decrease vulnerability.
+decrease vulnerability. The strategy for these systems is to focus on improving
+critical production systems and addressing the vulnerability of the population.
 
 ```{r}
 #| output: asis
@@ -182,8 +187,7 @@ prettyprint_countries(urg_hotspot_3_1$iso3c)
 
 #### Strained Systems
 
-Systems face acute social and economic challenges with high human vulnerability
-and moderate production and population density.
+These countries face high levels of vulnerability and have a moderate production and population density.
 
 ```{r}
 #| output: asis
@@ -201,10 +205,14 @@ urg_hotspot_2_3 <- subset(urgency_ranks, bi_class == "2-3")
 prettyprint_countries(urg_hotspot_2_3$iso3c)
 ```
 
-#### High-impact Priority Countries
+#### High-impact Priority Hubs
 
-Critical areas where investments can reach large, highly vulnerable populations
-and critical production systems, maximizing both urgency and impact.
+These countries are easy wins where investments can reach large, highly
+vulnerable populations and critical production systems, maximizing both urgency
+and impact.
+
+These areas are defined by a high population density and high production level
+coupled with high levels of vulnerability.
 
 ```{r}
 #| output: asis
@@ -250,7 +258,7 @@ aow1_sf <- merge(a0_sf_simple, aow1, by = "gaul0_code") |>
         bi_class %in% c("1-1", "1-2") ~ "Low Priority",
         bi_class %in% c("2-1", "2-2") ~ "Moderate Priority",
         bi_class %in% c("2-3", "1-3") ~ "Growth Opportunity Zones",
-        bi_class == "3-1" ~ "Need Hotspots",
+        bi_class == "3-1" ~ "Challenge Hotspots",
         bi_class == "3-2" ~ "Capacity Focus Zones",
         bi_class == "3-3" ~ "Easy Wins"
       ),
@@ -258,7 +266,7 @@ aow1_sf <- merge(a0_sf_simple, aow1, by = "gaul0_code") |>
         "Low Priority",
         "Moderate Priority",
         "Growth Opportunity Zones",
-        "Need Hotspots",
+        "Challenge Hotspots",
         "Capacity Focus Zones",
         "Easy Wins"
       )
@@ -282,7 +290,7 @@ ggplot() +
       "Low Priority" = "#D5D6D2",
       "Moderate Priority" = "#A7C080",
       "Growth Opportunity Zones" = "#DFAF8F",
-      "Need Hotspots" = "#E67E80",
+      "Challenge Hotspots" = "#E67E80",
       "Capacity Focus Zones" = "#B48EAD",
       "Easy Wins" = "#7FBBB3"
     )
@@ -291,7 +299,7 @@ ggplot() +
 
 ### AOW 1 Focus Groups
 
-#### Need Hotspots
+#### Challenge Hotspots
 
 Areas with high need for support and investment into CIS and Advisory Services.
 These regions have high levels of input inefficiency, large yield gaps, and
@@ -528,6 +536,7 @@ Support here can prevent moderate challenges from becoming critical.
 ```{r}
 #| output: asis
 aow3_hotspot_3_2 <- subset(aow3, bi_class %in% c("3-2", "2-1"))
+
 prettyprint_countries(aow3_hotspot_3_2$iso3c)
 ```
 
@@ -550,6 +559,55 @@ grape_df <- biscale::bi_class(
   style = "quantile",
   dim = 3
 )
+```
+
+```{r}
+#| fig-align: center
+#| fig-width: 10
+grape_sf <- merge(a0_sf_simple, grape_df, by = "gaul0_code") |>
+  mutate(
+    priority_group = factor(
+      case_when(
+        bi_class == "1-1" ~ "Priority R&D Hotspots",
+        bi_class == "1-3" ~ "Human Resource Gap",
+        bi_class == "3-1" ~ "R&D Spending Gap",
+        bi_class %in% c("1-2", "2-1") ~ "Low R&D Capacity",
+        bi_class %in% c("2-2") ~ "Moderate R&D Capacity",
+        bi_class %in% c("3-3", "3-2", "2-3") ~ "High R&D Capacity"
+      ),
+      levels = c(
+        "Priority R&D Hotspots",
+        "R&D Spending Gap",
+        "Human Resource Gap",
+        "Low R&D Capacity",
+        "Moderate R&D Capacity",
+        "High R&D Capacity"
+      )
+    )
+  )
+
+ggplot() +
+  theme_void(base_size = 14) + # Set a minimal theme for the map
+  geom_sf(data = grape_sf, aes(fill = priority_group), color = NA) +
+  geom_sf(
+    data = st_as_sf(a0_sf_simple),
+    color = "black",
+    fill = NA,
+    size = 0.2
+  ) +
+  labs(
+    fill = "Priority Groups"
+  ) +
+  scale_fill_manual(
+    values = c(
+      "High R&D Capacity" = "#6F8F5F",
+      "Moderate R&D Capacity" = "#A7C080",
+      "Low R&D Capacity" = "#D8E2C8",
+      "Human Resource Gap" = "#7FBBB3",
+      "Priority R&D Hotspots" = "#E67E80",
+      "R&D Spending Gap" = "#B48EAD"
+    )
+  )
 ```
 
 ### Focus Groups
@@ -584,6 +642,195 @@ grape_hotspot_2_1 <- subset(grape_df, bi_class == "3-1")
 prettyprint_countries(grape_hotspot_2_1$iso3c)
 ```
 
+#### Low R&D Capacity
+
+Areas with low human resources and low R&D spending.
+
+```{r}
+#| output: asis
+grape_hotspot_1_2 <- subset(grape_df, bi_class %in% c("2-1", "1-2"))
+prettyprint_countries(grape_hotspot_1_2$iso3c)
+```
+
+### Methods
+
+The prioritization methodology was based on five dimensions: the Areas of Work
+(AOW1–3), urgency, and local research and development capacity. For each
+dimension, indicators were compiled into composite indexes representing need,
+exposure, constraint, resilience, etc. These which were then used to classify
+countries into ranked groups based on quantiles. The top countries were selected
+from each of these groups and the countries appearing across multiple dimensions
+were counted. The most frequent priority countries across all of these
+dimensions were selected as the primary priority countries. The remaining
+countries became the secondary priority countries. The top 5 countries for AOW 1
+were selected based on high need alongside sufficient infrastructure and human
+capacity. The top countries for AOW 2 and AOW 3 were selected as having the the
+most shocks or constraining factors paired with the lowest capacity to respond.
+
+{{< pagebreak >}}
+
+## Country Priorities
+
+### Overall Priorities
+
+```{r}
+#| fig-align: center
+#| fig-width: 10
+## Highest Priority Countries
+
+# Urgency
+urgency_top_groups <- subset(
+  urgency_ranks,
+  bi_class %in% c("3-1", "3-1", "3-3", "2-2")
+)
+# urgency_top_composite <- subset(urgency_ranks, composite_index_rank <= 7)
+
+# R&D
+grape_top_groups <- subset(grape_df, bi_class %in% c("1-1"))
+
+# AOW 1
+aow1_top_groups <- subset(
+  aow1,
+  bi_class %in% c("3-1", "3-3", "3-2", "2-3", "1-3")
+)
+
+# AOW 2
+aow2_top_groups <- subset(aow2, bi_class %in% c("3-2", "2-1", "3-1"))
+
+# AOW 3
+aow3_top_groups <- subset(aow3, bi_class %in% c("3-2", "2-1", "3-1"))
+
+occurances <- table(c(
+  urgency_top_groups$iso3c,
+  # urgency_top_composite$iso3c,
+  grape_top_groups$iso3c,
+  aow1_top_groups$iso3c,
+  aow2_top_groups$iso3c,
+  aow3_top_groups$iso3c
+))
+
+main_countries <- names(occurances)[occurances > 1]
+# Keep highest urgency & remove low
+bottom_2s <- names(occurances)[occurances == 2]
+top_secondary <- tail(subset(urgency_ranks, iso3c %in% bottom_2s), 2)
+
+# Create Final Groups
+top_countries <- main_countries[!(main_countries %in% top_secondary$iso3c)]
+secondary_countries <- c(
+  top_secondary$iso3c,
+  names(occurances)[occurances == 1]
+)
+
+priority_plot <- a0_sf_simple |>
+  mutate(
+    category = case_when(
+      iso3_code %in% top_countries ~ "Primary Focus",
+      iso3_code %in% secondary_countries ~ "Secondary Focus",
+      TRUE ~ "Other"
+    )
+  )
+
+ggplot() +
+  geom_sf(
+    data = priority_plot,
+    aes(fill = category),
+  ) +
+  geom_sf(data = a0_sf_simple, color = "black", fill = NA) +
+  scale_fill_manual(
+    values = c(
+      "Primary Focus" = "#E67E80",
+      "Secondary Focus" = "#7FBBB3"
+    ),
+    na.value = NA
+  ) +
+  labs(
+    fill = "Priority Countries"
+  ) +
+  theme_minimal()
+```
+
+#### Primary Focus Countries
+
+```{r}
+#| output: asis
+prettyprint_countries(top_countries)
+```
+
+#### Secondary Focus Countries
+
+```{r}
+#| output: asis
+prettyprint_countries(secondary_countries)
+```
+
+### AOW Priorities
+
+#### AOW 1 Countries
+
+```{r}
+#| output: asis
+
+top_aow1 <- subset(aow1, bi_class == "3-3")$iso3c
+second_aow1 <- subset(aow1, bi_class %in% c("2-3", "1-3")) # Places with a high capacity
+
+second_aow1$urgency <- urgency_ranks$composite_index[match(
+  second_aow1$iso3c,
+  urgency_ranks$iso3c
+)]
+
+second_aow1 <- second_aow1 |>
+  arrange(desc(urgency)) |>
+  head(10 - length(top_aow1))
+
+
+prettyprint_countries(c(top_aow1, second_aow1$iso3c))
+```
+
+#### AOW 2 Countries
+
+```{r}
+#| output: asis
+top_aow2 <- subset(aow2, bi_class == "3-1")$iso3c
+second_aow2 <- subset(aow2, bi_class %in% c("2-1", "3-2"))
+
+second_aow2$urgency <- urgency_ranks$composite_index[match(
+  second_aow2$iso3c,
+  urgency_ranks$iso3c
+)]
+
+second_aow2 <- second_aow2 |>
+  arrange(desc(urgency)) |>
+  head(10 - length(top_aow2))
+
+prettyprint_countries(c(top_aow2, second_aow2$iso3c))
+```
+
+#### AOW 3 Countries
+
+```{r}
+#| output: asis
+subset(aow3, bi_class %in% c("3-2", "2-1", "3-1"))$iso3c |>
+  prettyprint_countries()
+```
+
+### Country Selection Methodology
+
+The prioritization methodology was based on five dimensions: the Areas of Work
+(AOW1–3), urgency, and local research and development capacity. For each
+dimension, indicators were compiled into composite indexes representing need,
+exposure, constraint, resilience, etc. These which were then used to classify
+countries into ranked groups based on quantiles. The top countries were selected
+from each of these groups and the countries appearing across multiple dimensions
+were counted. The most frequent priority countries across all of these
+dimensions were selected as the primary priority countries. The remaining
+countries became the secondary priority countries. The top 5 countries for AOW 1
+were selected based on high need alongside sufficient infrastructure and human
+capacity. The top countries for AOW 2 and AOW 3 were selected as having the the
+most shocks or constraining factors paired with the lowest capacity to respond.
+Ties for the top 10 countries were broken by the highest urgency index score.
+
+{{< pagebreak >}}
+
 ::: {.landscape}
 
 ## Appendix 1: Urgency
@@ -594,17 +841,11 @@ prettyprint_countries(grape_hotspot_2_1$iso3c)
 #| fig-height: 12
 
 urgency_sf |>
-  # subset(
-  #   # grepl("3", bi_class)
-  #   # vuln_index_rank <= 15 |
-  #   #   expo_index_rank <= 15 |
-  #     composite_index_rank <= 20
-  # ) |>
   ggplot(aes(x = expo_index_norm * 100, y = vuln_index_norm * 100)) +
   geom_point(aes(col = priority_group)) +
   ggrepel::geom_text_repel(
     aes(label = iso3c),
-    size = 3,
+    size = 5,
     show.legend = FALSE,
     max.overlaps = 100
   ) +
@@ -619,9 +860,9 @@ urgency_sf |>
     values = c(
       "Low Priority" = "#D5D6D2",
       "Moderate Priority" = "#A7C080",
-      "Growth Opportunity Zones" = "#DFAF8F",
-      "Underserved Communities" = "#E67E80",
-      "Resilience Building Areas" = "#B48EAD",
+      "Emerging Pressure Zones" = "#DFAF8F",
+      "Underserved Opportunity Hotspots" = "#E67E80",
+      "Strained Systems" = "#B48EAD",
       "High-Impact Priority Hubs" = "#7FBBB3"
     )
   ) +

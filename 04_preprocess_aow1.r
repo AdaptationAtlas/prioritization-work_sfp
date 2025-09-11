@@ -13,11 +13,15 @@ country_area <- read_parquet("data/results/mdata_area-lookup.parquet") |>
   )
 
 plt_yr <- 2019
+COUNTRY_SUBSET <- TRUE
+
+initial_countries <- read.csv("data/initial_prioritization.csv")$ISO3
+countries <- if (COUNTRY_SUBSET) initial_countries else a0_vect$iso3_code
 
 # --- Advisory Need  ---
 inputs <- read.csv("data/aow1_digi-advisory/FAOSTAT_fert-inputs.csv")
 inputs$iso3 <- countrycode(inputs$Area, "country.name", "iso3c")
-inputs <- subset(inputs, Year == plt_yr)
+inputs <- subset(inputs, Year == plt_yr & iso3 %in% countries)
 input_use <- aggregate(data = inputs, Value ~ iso3, FUN = sum)
 input_use$gaul0_code <- a0_vect$gaul0_code[
   match(input_use$iso3, a0_vect$iso3_code)
@@ -106,6 +110,7 @@ eba_df <- read.csv(
 )[c("Economy", "Overall.Score")]
 names(eba_df) <- c("country", "EBA_score")
 eba_df$iso3c <- countrycode(eba_df$country, "country.name", "iso3c")
+eba_df <- subset(eba_df, iso3c %in% countries)
 eba_df$gaul0_code <- a0_vect$gaul0_code[
   match(eba_df$iso3c, a0_vect$iso3_code)
 ]
@@ -116,8 +121,8 @@ net_ready_df <- read_excel(
   col_names = FALSE
 )
 names(net_ready_df) <- as.character(unlist(net_ready_df[136, ])) # 2nd to last row is col names...
-net_ready_df <- net_ready_df[1:135, c("ISO3Code", "NRI.score")]
-# subset(ISO3Code %in% initial_countries, select = c("ISO3Code", "NRI.score"))
+net_ready_df <- net_ready_df[1:135, ] |>
+  subset(ISO3Code %in% countries, select = c("ISO3Code", "NRI.score"))
 net_ready_df$NRI.score <- as.numeric(net_ready_df$NRI.score)
 names(net_ready_df) <- c("iso3c", "NRI_score")
 net_ready_df$gaul0_code <- a0_vect$gaul0_code[

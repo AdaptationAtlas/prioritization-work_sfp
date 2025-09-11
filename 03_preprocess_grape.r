@@ -3,6 +3,7 @@ library(nanoparquet)
 library(terra)
 
 plt_yr <- 2019
+COUNTRY_SUBSET <- TRUE
 
 grape_df <- readxl::read_xlsx("data/fin-cap/grape_v1.0.0.xlsx")
 supp_data <- readxl::read_xlsx("data/fin-cap/grape_macro_db_v1.0.0.xlsx")
@@ -10,10 +11,12 @@ urgency_df <- read_parquet("data/results/urgency.parquet")
 a0_df <- subset(urgency_df, boundary_id == "gaul0_code")
 a0_vect <- vect("data/bounds_a0.parquet")
 a0_df$iso3c <- a0_vect$iso3_code[match(a0_df$gaul0_code, a0_vect$gaul0_code)]
+initial_countries <- read.csv("data/initial_prioritization.csv")$ISO3
+countries <- if (COUNTRY_SUBSET) initial_countries else a0_vect$iso3_code
 
-# grape_df <- subset(grape_df, iso3c %in% initial_countries)
-supp_data <- supp_data[c(
-  # subset(supp_data, iso3c %in% initial_countries)[c(
+
+grape_df <- subset(grape_df, iso3c %in% countries & year == plt_yr)
+supp_data <- subset(supp_data, iso3c %in% countries & year == plt_yr)[c(
   "iso3c",
   "year",
   "ag_gdp_ppp",
@@ -44,7 +47,7 @@ grape_plt$fincap_index <- ((min_max(grape_plt$hr_per_rpop) +
   min_max(grape_plt$rd_pct_gdp)) /
   2)
 
-grape_plt <- subset(grape_plt, year == plt_yr & iso3c %in% a0_vect$iso3_code)
+# grape_plt <- subset(grape_plt, year == plt_yr & iso3c %in% a0_vect$iso3_code)
 
 grape_plt$urgency <- a0_df[
   match(grape_plt$iso3c, a0_df$iso3c),

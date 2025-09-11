@@ -1,0 +1,1725 @@
+---
+title: "Sustainable Farming Program Prioritization Report"
+format:
+  typst:
+    margin:
+      x: 0.5cm
+      y: 0.5cm
+
+execute:
+  echo: false
+  warning: false
+---
+
+```{r}
+#| include: false
+library(terra)
+library(sf)
+library(tidyr)
+library(ggplot2)
+library(jsonlite)
+library(dplyr)
+library(patchwork)
+library(readxl)
+library(biscale)
+library(countrycode)
+fig_font_sz <- 17
+urgency_data <- read_json("data/urgency.json")
+plt_yr <- 2019
+```
+
+# Introduction
+
+## Boundary and Cropland Datasets
+
+Administrative boundaries are provided at the national (admin0) level, derived
+from the latest GAUL24 dataset. Results are available for three agricultural
+system classifications: the original Dixon dataset with 46 classes, and two
+FAO-derived versions with 8 classes each. We also apply an agricultural area
+mask based on the _Global Livestock of the World_ (2015) dataset and global
+cropland extent data.
+
+## Urgency Index Calculation
+
+The urgency index is calculated in the following steps:
+
+1. Compute the total area and agricultural area by agricultural system, country,
+   and system–country combination.
+2. Read in the variable rasters and mask them to the agricultural area.
+3. Classify each variable raster into low, moderate, and high categories based
+   on predefined thresholds (with inversion where appropriate).
+4. Determine the proportion of agricultural area falling within the high-risk
+   category for each country and system.
+5. Group variables into exposure and vulnerability categories; normalize their
+   values and calculate the mean for each category to produce sub-indices.
+6. Compute the final urgency index as the mean of the exposure and vulnerability
+   sub-indices for each country and system.
+
+The variables included in the index are:
+
+```{r}
+#| output: asis
+
+gen_threshold_text <- function(x) {
+  if (is.null(x$threshold)) {
+    return("")
+  } else {
+    th <- x$threshold
+    paste0(
+      "  - Thresholds:\n",
+      "    - Low: ",
+      th$low,
+      " - ",
+      th$mid,
+      "\n",
+      "    - Moderate: ",
+      th$mid,
+      " - ",
+      th$high,
+      "\n",
+      "    - High: > ",
+      th$high
+    )
+  }
+}
+
+cat(paste0(
+  lapply(urgency_data$variables, function(x) {
+    paste0(
+      "- **",
+      x$title %||% x$var_name,
+      "**\n",
+      "  - Group: ",
+      x$group,
+      "\n",
+      "  - Source: ",
+      x$source,
+      "\n",
+      gen_threshold_text(x)
+    )
+  }),
+  collapse = "\n"
+))
+```
+
+## Local Capacity Analysis
+
+This data comes from GRAPE (WUR-ERS Global Research on Agriculture). Values for
+human resource used for agricultural R&D are normalized for comparison between
+countries using rural population, and values for spending on agricultural R&D
+are normalized between countries using agricultural GDP.
+
+Agricultural R&D spending as a share of agricultural GDP—reflects how much
+priority a government places on agricultural research. R&D human resource
+capacity per rural capita—shows how that investment translates into available
+research and outreach capacity at the population level. A government may invest
+heavily in agricultural R&D, yet the benefits may not scale evenly across the
+rural population.
+
+## Area of Work Indices
+
+For each area, key variables were selected to represent both need (where
+services are most required) and capacity (where delivery is most feasible).
+These indicators span agronomic, socioeconomic, infrastructural, and
+institutional dimensions, and are normalized and aggregated into composite
+indices. The steps involved are:
+
+1. Gather data for the key variables at a national level. If data is in raster
+   format, it is extracted to admin 0 boundaries. Otherwise the admin 0 data is
+   used.
+2. Datasets related to absolute values (VOP, research spending, number of
+   farmers, etc.), are scaled based on total country agricultural area,
+   agricultural GDP, or rural population to allow comparison between countries
+   of different sizes and populations.
+3. Some variables are inverted to reflect the direction of the other variables
+   within the index.
+4. Variables are normalized to a 0-1 scale.
+5. Variables are aggregated into the need and capacity indices using arithmetic
+   means.
+6. Each index is classified into low, moderate, and high categories based on the
+   distribution of the index values for visualization on the bivariate maps.
+
+This approach enables targeting of interventions where impact is likely to be
+both necessary and achievable.
+
+### AOW1 - AI Enabled Advisories
+
+The variables included in the Advisory Need Index are:
+
+```{r}
+#| output: asis
+format_variable_summary <- function(variable_list) {
+  cat(paste0(
+    lapply(variable_list, function(x) {
+      paste0(
+        "- **",
+        x$title %||% x$var_name,
+        "**\n",
+        "  - Source: ",
+        x$source,
+        "\n"
+      )
+    }),
+    collapse = "\n"
+  ))
+}
+
+advisory_need <- list(
+  list(
+    title = "Fertilizer Use Per Unit of Agricultural Production",
+    source = "FAOSTAT"
+  ),
+  list(
+    title = "Crop Value of Production Per Km^2",
+    source = "MapSpam 2010"
+  ),
+  list(
+    title = "Crop Yield Gap",
+    source = "FAO GAEZ4"
+  )
+)
+
+format_variable_summary(advisory_need)
+```
+
+The variables included in the Delivery Capacity Index are:
+
+```{r}
+#| output: asis
+delivery_capacity <- list(
+  list(
+    title = "Weather Station Density (KDE)",
+    source = "NOAA, OSCAR, WMO Networks"
+  ),
+  list(
+    title = "Education Attainment",
+    source = "University of Washington - IHME"
+  ),
+  list(
+    title = "Internet Downlaod Speed",
+    source = "OOKLA"
+  ),
+  list(
+    title = "Ease of Doing Agri-business",
+    source = "World Bank EBA"
+  ),
+  list(
+    title = "Network Readiness Index",
+    source = "Network Readiness Index"
+  )
+)
+
+format_variable_summary(delivery_capacity)
+```
+
+### AOW2 - Managing Shocks
+
+The variables included in the Shock Exposure Index are:
+
+```{r}
+#| output: asis
+shock_exposure <- list(
+  list(
+    title = "Rainfall Variability (CV)",
+    source = "CHIRPS"
+  ),
+  list(
+    title = "Drought Frequency (number of years SPEI < -1)",
+    source = "SPEI"
+  ),
+  list(
+    title = "Flood Risk",
+    source = "JRC Flood Hazard Map"
+  ),
+  list(
+    title = "Pest and Disease Impact on Yield (ssp370 - 2100)",
+    source = "Jason Rhor & lab (unpublished)"
+  )
+)
+format_variable_summary(shock_exposure)
+```
+
+The variables included in the Resilience Capacity Index are:
+
+```{r}
+#| output: asis
+resilience_capacity <- list(
+  list(
+    title = "Internet Download Speed",
+    source = "OOKLA"
+  ),
+  list(
+    title = "Gridded Relative Deprivation Index (GRDI)",
+    source = "NASA SEDAC"
+  ),
+  list(
+    title = "Rural Population Bank Account Ownership",
+    source = "World Bank Findex"
+  )
+  # CIS variable still unknown — add here when defined
+)
+format_variable_summary(resilience_capacity)
+```
+
+### AOW3 - Binding Constraints and Opportunities
+
+The variables included in the Constraint Burden Index are:
+
+```{r}
+#| output: asis
+constraint_burden <- list(
+  list(
+    title = "Crop Diversity (Disease Proxy)",
+    source = "FAO CropGrids & Shannon Diverisity Index"
+  ),
+  list(
+    title = "Soil Carbon",
+    source = "SoilGrids"
+  ),
+  list(
+    title = "Soil pH",
+    source = "SoilGrids"
+  )
+)
+format_variable_summary(constraint_burden)
+```
+
+The variables included in the Enabling Environment Index are:
+
+```{r}
+#| output: asis
+enabling_environment <- list(
+  list(
+    title = "Time to City (Market Access Proxy)",
+    source = "Nelson et al. 2019"
+  ),
+  list(
+    title = "Rural Population Density",
+    source = "WorldPop & Global Human Settlement Layer"
+  ),
+  list(
+    title = "Machinery Per Unit of Agricultural Land",
+    source = "United States Department of Agriculture & Our World in Data"
+  ),
+  list(
+    title = "Rural Population Bank Account Ownership",
+    source = "World Bank Findex"
+  )
+)
+
+format_variable_summary(enabling_environment)
+```
+
+```{r}
+#| include: false
+a0_vect <- vect("data/bounds_a0.parquet")
+a0_vect_simple <- vect("data/a0_vect_vsimple.topojson")
+tlu_mask <- rast("data/tlu.tif") > 0.4 # tlu per cell
+cropland_rast <- rast("data/Global_cropland_3km_2019.tif")
+cropland_mask <- project(cropland_rast, tlu_mask) > 10 # 10% cell = crop
+ag_cells <- cropland_mask | tlu_mask # keep cells with either or both
+
+# Ag system dataset 1:
+# https://data.apps.fao.org/catalog/iso/4e463d70-7593-11db-b9b2-000d939bc5d8
+# farm_sys <- rast("data/fao_fggd_farmsys.tif")
+# names(levels(farm_sys)[[1]]) <- c("value", "land_use")
+# farm_sys <- subst(farm_sys, c(-997, 8), NA, raw = TRUE) # remove waterbodies
+# farm_sys <- droplevels(farm_sys)
+
+# Ag system dataset 2:
+# https://data.apps.fao.org/catalog/iso/c9be830e-daf5-4926-bbf6-0051ad057c53
+# farm_sys <- rast("fao_farmsys.tif")
+
+# Ag system dataset 3:
+# Dixon
+farm_sys <- rast("data/bounds_farmSys.tif")
+names(levels(farm_sys)[[1]]) <- c("value", "land_use")
+
+farm_sys <- crop(farm_sys, a0_vect, mask = TRUE) # mask global rast to get region area
+ag_cells <- crop(ag_cells, a0_vect, mask = TRUE)
+farm_sys_lvl <- levels(farm_sys)
+
+cell_area <- cellSize(farm_sys, unit = "km")
+cell_area_ag <- mask(cell_area, ag_cells, maskvalue = FALSE)
+initial_countries <- read.csv("data/initial_prioritization.csv")$ISO3 # from Jan & Oscar
+a0_prioritized <- subset(
+  a0_vect,
+  iso3_code %in% initial_countries,
+  NSE = TRUE # required by terra for non quoted columns
+)
+
+a0 <- rasterize(a0_prioritized, farm_sys, field = "gaul0_code")
+```
+
+::: {.landscape}
+
+# Farm Sys Area by Country
+
+```{r}
+#| include: false
+country_area <- zonal(cell_area, a0, fun = "sum", na.rm = TRUE)
+colnames(country_area) <- c("country_id", "area_km2")
+country_area_ag <- zonal(cell_area_ag, a0, fun = "sum", na.rm = TRUE)
+colnames(country_area_ag) <- c("country_id", "area_km2_ag")
+country_area <- merge(country_area, country_area_ag, by = "country_id")
+
+farm_sys_area <- zonal(cell_area, farm_sys, fun = "sum", na.rm = TRUE)
+colnames(farm_sys_area) <- c("farm_sys_id", "area_km2")
+farm_sys_area_ag <- zonal(cell_area_ag, farm_sys, fun = "sum", na.rm = TRUE)
+colnames(farm_sys_area_ag) <- c("farm_sys_id", "area_km2_ag")
+farm_sys_area <- merge(farm_sys_area, farm_sys_area_ag, by = "farm_sys_id")
+
+a0_sys <- a0 * 1e4 + farm_sys # numeric encode faster than categories
+names(a0_sys) <- "a0_sys_id"
+a0_sys_area <- zonal(cell_area, a0_sys, fun = "sum", na.rm = TRUE)
+colnames(a0_sys_area) <- c("a0_sys_id", "area_km2")
+a0_sys_area_ag <- zonal(cell_area_ag, a0_sys, fun = "sum", na.rm = TRUE)
+colnames(a0_sys_area_ag) <- c("a0_sys_id", "area_km2_ag")
+a0_sys_area <- merge(a0_sys_area, a0_sys_area_ag, by = "a0_sys_id")
+
+area_lookup <- do.call(
+  rbind,
+  lapply(list(country_area, farm_sys_area, a0_sys_area), \(df) {
+    names(df)[1] <- "ID"
+    df
+  })
+)
+
+a0_sys_area$pct_area_ag <- with(a0_sys_area, (area_km2_ag / area_km2) * 100)
+a0_sys_area$a0 <- a0_sys_area$a0_sys_id %/% 1e4 # integer division to get a0
+a0_sys_area$sys <- as.character(a0_sys_area$a0_sys_id %% 1e4) # modulo to reverse sys
+
+sys_labels <- setNames(
+  gsub("-|.(?=\\()", " ", farm_sys_lvl[[1]]$land_use, perl = TRUE),
+  as.character(farm_sys_lvl[[1]]$value)
+)
+
+a0_labels <- setNames(a0_prioritized$gaul0_name, a0_prioritized$gaul0_code)
+
+# Get top systems
+sys_totals <- aggregate(
+  area_km2_ag ~ sys,
+  data = a0_sys_area,
+  sum,
+  na.rm = TRUE
+)
+top_sys <- head(sys_totals[order(-sys_totals$area_km2_ag), "sys"], 15)
+top_sys_names <- sys_labels[top_sys]
+```
+
+```{r}
+#| column: page
+#| fig-width: 21
+#| fig-height: 14
+#| fig-align: center
+area_plot_data <- subset(a0_sys_area, sys %in% top_sys)
+area_plot_data$sys <- sys_labels[area_plot_data$sys]
+
+area_plot_data |>
+  complete(
+    a0 = unique(area_plot_data$a0), # fill missing values for pretty plot
+    sys = unique(area_plot_data$sys)
+  ) |>
+  ggplot(aes(x = factor(sys), y = factor(a0), fill = area_km2_ag)) +
+  geom_tile(color = "white", lwd = 1.5, linetype = 1) +
+  scale_fill_viridis_c(name = "Area (km²)", na.value = "#eeee") +
+  labs(
+    x = "System code (sys)",
+    # y = "Country code (a0)",
+    y = NULL,
+    title = "Area by Country and System"
+  ) +
+  scale_x_discrete(labels = scales::label_wrap(10)) +
+  scale_y_discrete(labels = a0_labels) +
+  theme_minimal(base_size = fig_font_sz)
+```
+
+:::
+
+```{r}
+#| include: false
+prepare_rast <- function(
+    obj,
+    base_rast,
+    data_dir = "data/urgency",
+    norm = FALSE,
+    classify = FALSE,
+    mask = NULL) {
+  path <- file.path(data_dir, obj$path)
+  var_rast <- rast(path)
+  var_name <- obj$var_name
+  var_rast <- project(var_rast, base_rast)
+  if (!is.null(mask)) {
+    var_rast <- mask(var_rast, mask, maskvalue = FALSE)
+  }
+  if (!is.null(obj$thresholds) && classify) {
+    thresholds <- as.numeric(unlist(obj$thresholds))
+    var_rast <- classify(var_rast, c(thresholds, Inf))
+    if (norm) {
+      x_min <- 0 # Normalize between thresholds to not loose range
+      x_max <- length(obj$thresholds) - 1 # index starting from 0
+      var_rast <- (var_rast - x_min) / (x_max - x_min)
+    }
+  } else if (norm) {
+    mnmx <- terra::minmax(var_rast, compute = TRUE)
+    x_min <- mnmx[1]
+    x_max <- mnmx[2]
+    var_rast <- (var_rast - x_min) / (x_max - x_min)
+  }
+  if (obj$inverse) {
+    var_rast <- max(var_rast, na.rm = T) + min(var_rast, na.rm = T) - var_rast
+  }
+  if (length(names(var_rast)) == 1) {
+    names(var_rast) <- var_name
+    varnames(var_rast) <- var_name
+  } else {
+    names(var_rast) <- paste0(var_name, "_", names(var_rast))
+    varnames(var_rast) <- names(var_rast)
+  }
+  return(var_rast)
+}
+
+zonal_extract <- function(
+    data_rast,
+    zone_rasts,
+    stat_fn = "mean") {
+  admin_results <- lapply(seq_along(zone_rasts), function(i) {
+    zone_rast <- zone_rasts[[i]]
+    df <- terra::zonal(data_rast, zone_rast, fun = stat_fn, na.rm = TRUE)
+    df$boundary_id <- names(zone_rast)
+    df$id <- df[, 1]
+    return(df[2:4])
+  })
+  admin_df <- do.call(rbind, admin_results)
+  return(admin_df)
+}
+
+df_classify_norm <- function(df, obj, norm = FALSE, classify = FALSE) {
+  var_name <- obj$var_name
+  if (!is.null(obj$thresholds) && classify) {
+    thresholds <- as.numeric(unlist(obj$thresholds))
+    var_classed <- paste0(var_name, "_classed")
+    df[var_classed] <- cut(
+      df[[var_name]],
+      c(thresholds, Inf)
+    )
+    if (norm) {
+      var_norm <- paste0(var_name, "_norm")
+      x_min <- 1
+      x_max <- length(thresholds)
+      df[var_norm] <- (as.numeric(df[[var_classed]]) - x_min) /
+        (x_max - x_min)
+    }
+  } else if (norm) {
+    var_norm <- paste0(var_name, "_norm")
+    x_min <- min(df[[var_name]], na.rm = TRUE)
+    x_max <- max(df[[var_name]], na.rm = TRUE)
+    df[var_norm] <- (as.numeric(df[[var_name]]) - x_min) /
+      (x_max - x_min)
+  }
+  if (obj$inverse && norm && obj$agg_stat != "pixel_area") {
+    var_norm <- paste0(var_name, "_norm")
+    df[[var_norm]] <- max(df[[var_norm]], na.rm = TRUE) +
+      min(df[[var_norm]], na.rm = TRUE) -
+      df[[var_norm]]
+  }
+  return(df)
+}
+
+add_geographic_info <- function(df) {
+  df$gaul0_code <- ifelse(df$boundary_id == "gaul0_code", df$id, NA)
+  df$land_use <- ifelse(df$boundary_id == "land_use", df$id, NA)
+
+  # Handle a0_sys_id boundary
+  a0_sys_mask <- df$boundary_id == "a0_sys_id"
+  df$gaul0_code[a0_sys_mask] <- as.numeric(df$id[a0_sys_mask]) %/% 1e4
+  df$land_use[a0_sys_mask] <- sys_labels[as.character(
+    as.numeric(df$id[a0_sys_mask]) %% 1e4
+  )]
+
+  return(df)
+}
+
+process_urgency_data <- function(
+    vars,
+    area_based = TRUE,
+    classify_raster = TRUE,
+    classify_df = FALSE) {
+  # Set classify parameter based on area_based unless overridden
+  index_tables <- lapply(vars, function(x) {
+    rast_data <- prepare_rast(
+      x,
+      farm_sys,
+      mask = ag_cells,
+      classify = classify_raster
+    )
+
+    # Set aggregation statistic
+    if (!area_based) {
+      x$agg_stat <- "mean"
+    }
+    extract_fn <- x$agg_stat
+
+    # Handle pixel area calculations
+    if (!is.null(x$thresholds) && x$agg_stat == "pixel_area") {
+      level <- ifelse(x$inverse, 0, length(x$thresholds) - 1)
+      high_mask <- rast_data == level
+      rast_data <- mask(cell_area_ag, high_mask, maskvalue = c(FALSE, NA))
+      names(rast_data) <- x$var_name
+      extract_fn <- "sum"
+    }
+
+    # Extract and process data
+    extract <- zonal_extract(rast_data, list(a0, farm_sys, a0_sys), extract_fn)
+
+    if (!is.null(x$thresholds) && x$agg_stat == "pixel_area") {
+      extract$total_area_ag <- area_lookup[
+        match(extract$id, area_lookup$ID),
+        "area_km2"
+      ]
+      extract[[x$var_name]] <- extract[[x$var_name]] / extract$total_area_ag
+      extract$total_area_ag <- NULL
+    }
+    df_classify_norm(extract, x, norm = TRUE, classify = classify_df)
+  })
+
+  # Merge all index tables
+  merged_df <- Reduce(
+    function(x, y) {
+      merge(x, y, by = c("boundary_id", "id"))
+    },
+    index_tables
+  )
+
+  # Calculate composite index
+  group_vec <- unlist(lapply(vars, \(x) setNames(x$group, x$var_name)))
+
+  # Get normalized columns and their base names
+  norm_cols <- grep("_norm$", names(merged_df), value = TRUE)
+  var_names <- sub("_norm$", "", norm_cols)
+
+  # Assign groups to norm columns
+  groups <- group_vec[var_names]
+  names(groups) <- norm_cols
+
+  merged_df$vuln_index <- rowMeans(
+    merged_df[, names(groups[groups == "vulnerability"])],
+    na.rm = TRUE
+  )
+  merged_df$expo_index <- rowMeans(
+    merged_df[, names(groups[groups == "exposure"])],
+    na.rm = TRUE
+  )
+  merged_df$composite_index <- rowMeans(
+    merged_df[, c("vuln_index", "expo_index")],
+    na.rm = TRUE
+  )
+
+  # Add geographic and land use information
+  merged_df <- add_geographic_info(merged_df)
+
+  return(merged_df)
+}
+```
+
+::: {.landscape}
+
+# Urgency
+
+```{r}
+#| include: false
+vars <- urgency_data$variables
+
+merged_df <- process_urgency_data(
+  vars,
+  area_based = TRUE,
+  classify_raster = TRUE,
+  classify_df = FALSE
+)
+
+plot_data <- subset(
+  merged_df,
+  boundary_id == "a0_sys_id" & land_use %in% top_sys_names
+)
+```
+
+```{r}
+#| column: page
+#| fig-width: 21
+#| fig-height: 14
+#| fig-align: center
+
+# plot_data |>
+#   complete(
+#     gaul0_code = unique(plot_data$gaul0_code), # fill missing values for pretty plot
+#     land_use = unique(plot_data$land_use)
+#   ) |>
+#   ggplot(aes(x = land_use, y = gaul0_code, fill = composite_index)) +
+#   geom_tile(color = "white", lwd = 1.5, linetype = 1) +
+#   scale_fill_viridis_c(name = "Urgency (0-1)", na.value = "#eeee") +
+#   labs(
+#     x = "System code (sys)",
+#     y = "Country",
+#     title = "Urgency by Country and System"
+#   ) +
+#   scale_y_discrete(labels = a0_labels) +
+#   theme_minimal()
+
+plot_data$area <- area_lookup[
+  match(plot_data$id, area_lookup$ID),
+  "area_km2_ag"
+]
+
+plot_data |>
+  complete(
+    gaul0_code = unique(plot_data$gaul0_code),
+    land_use = unique(plot_data$land_use)
+  ) |>
+  ggplot(aes(
+    x = land_use,
+    y = gaul0_code,
+    size = area,
+    fill = composite_index
+  )) +
+  geom_point(shape = 21, color = "white", stroke = 1.2) +
+  scale_fill_viridis_c(
+    name = "Urgency (0–1)",
+    na.value = "#eeee",
+    direction = -1
+  ) +
+  scale_size_continuous(name = "Area", range = c(3, 12)) +
+  guides(
+    size = guide_legend(
+      override.aes = list(
+        shape = 21,
+        fill = "grey70"
+      )
+    ),
+    fill = guide_colorbar()
+  ) +
+  labs(
+    x = "System code (sys)",
+    # y = "Country",
+    y = NULL,
+    title = "Urgency by Country and System (Bubble Size = Area)"
+  ) +
+  scale_y_discrete(labels = a0_labels) +
+  scale_x_discrete(labels = scales::label_wrap(10)) +
+  theme_minimal(base_size = fig_font_sz)
+```
+
+:::
+
+```{r}
+#| column: page
+#| fig-width: 15
+#| fig-height: 15
+#| fig-align: center
+# merged_df |>
+#   subset(boundary_id == "a0_sys_id") |>
+#   ggplot(aes(x = composite_index, y = gaul0_code, fill = land_use)) +
+#   geom_bar(stat = "identity") +
+#   labs(
+#     x = "Index",
+#     y = "Country",
+#     title = "Country Urgency Index"
+#   ) +
+#   scale_y_discrete(labels = a0_labels) +
+#   theme_minimal()
+
+merged_df |>
+  subset(boundary_id == "gaul0_code") |>
+  mutate(
+    cg_region = a0_vect[match(gaul0_code, a0_vect$gaul0_code), ]$cg_region
+  ) |>
+  ggplot(aes(
+    x = composite_index,
+    y = reorder(gaul0_code, composite_index),
+    fill = cg_region
+  )) +
+  geom_bar(stat = "identity") +
+  labs(
+    x = "Index (0-1)",
+    y = "Country",
+    title = "Country Urgency Index"
+  ) +
+  scale_y_discrete(labels = a0_labels) +
+  theme_minimal(base_size = fig_font_sz)
+
+merged_df |>
+  subset(boundary_id == "gaul0_code") |>
+  mutate(
+    cg_region = a0_vect[match(gaul0_code, a0_vect$gaul0_code), ]$cg_region
+  ) |>
+  group_by(cg_region) |>
+  slice_max(order_by = composite_index, n = 6) |> # top 5 per cg_region
+  ungroup() |>
+  ggplot(aes(
+    x = composite_index,
+    y = reorder(gaul0_code, composite_index),
+    fill = cg_region
+  )) +
+  geom_bar(stat = "identity") +
+  labs(
+    x = "Index (0-1)",
+    y = "Country",
+    title = "Country Urgency Index"
+  ) +
+  scale_y_discrete(labels = a0_labels) +
+  facet_wrap(~cg_region, scales = "free_y") + # facet by cg_region
+  theme_minimal(base_size = fig_font_sz)
+
+# merged_df |>
+#   subset(boundary_id == "land_use") |>
+#   ggplot(aes(
+#     x = composite_index,
+#     y = reorder(land_use, composite_index),
+#   )) +
+#   geom_bar(stat = "identity") +
+#   labs(
+#     x = "Index (0-1)",
+#     y = "System",
+#     title = "System Urgency Index"
+#   ) +
+#   scale_y_discrete(labels = a0_labels) +
+#   theme_minimal()
+```
+
+::: {.landscape}
+
+```{r}
+# Urgency Index Map
+#| include: false
+a0_df <- subset(merged_df, boundary_id == "gaul0_code")
+a0_df$iso3c <- a0_vect[match(a0_df$gaul0_code, a0_vect$gaul0_code), ]$iso3_code
+a0_idx_sf <- merge(a0_vect_simple, a0_df, by = "gaul0_code")
+#
+# ggplot() +
+#   geom_sf(data = st_as_sf(a0_idx_sf), aes(fill = composite_index)) +
+#   geom_sf(data = st_as_sf(a0_vect_simple), fill = NA, color = "black") +
+#   scale_fill_viridis_c(name = "Urgency (0-1)", na.value = "#eeee") +
+#   theme_minimal(base_size = fig_font_sz)
+```
+
+:::
+
+::: {.landscape}
+
+## Bivariate Map of the Urgency Dimensions
+
+Note on legend: High Exposure (blue) areas have high rural population density
+and a higher agricultural production per km². High Vulnerability (orange)
+regions have the greatest levels of poverty and lowest education.
+
+```{r}
+#| column: page
+#| fig-width: 18
+#| fig-height: 12
+#| fig-align: center
+
+urgency_bivar <- bi_class(
+  a0_df,
+  vuln_index,
+  expo_index,
+  style = "quantile",
+  dim = 3
+)
+urgency_sf <- terra::merge(a0_vect_simple, urgency_bivar, by = "gaul0_code")
+
+# Create the bivariate map using ggplot2
+pallet <- "BlueOr"
+bivar_map <- ggplot() +
+  theme_void(base_size = 14) + # Set a minimal theme for the map
+  geom_sf(data = sf::st_as_sf(urgency_sf), aes(fill = bi_class), color = NA) +
+  geom_sf(
+    data = st_as_sf(a0_vect_simple),
+    color = "black",
+    fill = NA,
+    size = 0.2
+  ) +
+  # Apply the bivariate color scale using the selected palette and dimensions
+  bi_scale_fill(pal = pallet, dim = 3, flip_axes = FALSE, rotate_pal = FALSE) +
+  theme(legend.position = "none")
+
+# Create the legend for the bivariate map
+bivar_legend <- bi_legend(
+  pal = pallet,
+  flip_axes = FALSE,
+  rotate_pal = FALSE,
+  dim = 3,
+  xlab = "Vulnerability",
+  ylab = "Exposure",
+  size = 10
+) +
+  theme(
+    panel.background = element_blank(),
+    plot.background = element_blank()
+  )
+
+# Combine the map and legend using patchwork
+bivar_map +
+  inset_element(bivar_legend, left = 0.5, bottom = 0, right = 0.9, top = 0.4)
+```
+
+:::
+
+::: {.landscape}
+
+```{r}
+#| include: false
+# GRAPE data
+grape_df <- readxl::read_xlsx("data/fin-cap/grape_v1.0.0.xlsx")
+# rd_grape <- readxl::read_xlsx("data/fin-cap/grape_rd_v1.0.0.xlsx")
+grape_df <- subset(grape_df, iso3c %in% initial_countries)
+supp_data <- readxl::read_xlsx("data/fin-cap/grape_macro_db_v1.0.0.xlsx")
+supp_data <- subset(supp_data, iso3c %in% initial_countries)[c(
+  "iso3c",
+  "year",
+  "ag_gdp_ppp",
+  "population",
+  "rural_pop_share"
+)]
+supp_data$rural_pop <- supp_data$rural_pop_share * supp_data$population
+grape_df <- merge(grape_df, supp_data, by = c("iso3c", "year"))
+
+grape_hr <- subset(grape_df, variable == "HR")
+grape_hr$hr_per_rpop <- grape_hr$value / grape_hr$rural_pop # high = better
+
+grape_rd <- subset(grape_df, variable == "RD")
+grape_rd$rd_pct_gdp <- (grape_rd$value / grape_rd$ag_gdp_ppp) * 100 # high = better
+
+merge_cols <- c("iso3c", "year")
+grape_plt <- merge(
+  grape_hr[c(merge_cols, "hr_per_rpop")],
+  grape_rd[c(merge_cols, "rd_pct_gdp")],
+  by = merge_cols
+)
+#
+# subset(grape_plt, year == 2018) |>
+#   ggplot(aes(x = rd_pct_gdp, y = hr_per_rpop, color = iso3c)) +
+#   geom_point() +
+#   theme_minimal(base_size = fig_font_sz)
+#
+# subset(grape_rd, year == 2018) |>
+#   ggplot(aes(x = rd_pct_gdp, y = reorder(iso3c, rd_pct_gdp), color = iso3c)) +
+#   geom_col() +
+#   theme_minimal(base_size = fig_font_sz)
+#
+# subset(grape_hr, year == 2018) |>
+#   ggplot(aes(x = hr_per_rpop, y = reorder(iso3c, hr_per_rpop), color = iso3c)) +
+#   geom_col() +
+#   theme_minimal(base_size = fig_font_sz)
+#
+# subset(grape_hr, year %in% 2010:2020) |>
+#   ggplot(aes(x = year, y = hr_per_rpop, color = iso3c)) +
+#   geom_line() +
+#   theme_minimal(base_size = fig_font_sz)
+#
+# subset(grape_rd, year %in% 2010:2020) |>
+#   ggplot(aes(x = year, y = rd_pct_gdp, color = iso3c)) +
+#   geom_line() +
+#   theme_minimal(base_size = fig_font_sz)
+
+min_max <- function(x) {
+  (x - min(x, na.rm = T)) / (max(x, na.rm = T) - min(x, na.rm = T))
+}
+
+grape_plt$fincap_index <- ((min_max(grape_plt$hr_per_rpop) +
+  min_max(grape_plt$rd_pct_gdp)) /
+  2)
+grape_plt$urgency <- a0_df[
+  match(grape_plt$iso3c, a0_df$iso3c),
+]$composite_index
+grape_plt_yr <- subset(grape_plt, year == plt_yr)
+urgency_order <- order(grape_plt_yr$urgency, decreasing = TRUE)
+grape_plt_yr$iso3_factor <- factor(
+  grape_plt_yr$iso3c,
+  levels = grape_plt_yr$iso3c[order(grape_plt_yr$urgency, decreasing = TRUE)]
+)
+```
+
+## Bivariate Map of Country Financial/Research Capacity
+
+```{r}
+#| column: page
+#| fig-width: 18
+#| fig-height: 12
+#| fig-align: center
+
+# grape_plt_yr |>
+#   ggplot(aes(x = rd_pct_gdp, y = hr_per_rpop)) +
+#   geom_point(aes(size = urgency, color = iso3_factor), show.legend = TRUE) +
+#   scale_color_discrete(
+#     name = "Country & Urgency",
+#     type = scales::hue_pal()(length(unique(grape_plt_yr$iso3_factor))))
+#   ) +
+#   scale_size_continuous(
+#     name = "Country & Urgency",
+#     breaks = sort(unique(grape_plt_yr$urgency), decreasing = TRUE),
+#     labels = levels(grape_plt_yr$iso3_factor)
+#   ) +
+#   theme_minimal(base_size = fig_font_sz) +
+#   labs(
+#     x = "Ag R&D Prop. of Ag. GDP",
+#     y = "Ratio Ag R&D Human Resources (FTE) To Rural Pop."
+#   )
+#
+
+grape_bivar <- bi_class(
+  grape_plt_yr,
+  x = "rd_pct_gdp",
+  y = "hr_per_rpop",
+  style = "quantile",
+  dim = 3
+)
+grape_plt_sf <- merge(
+  a0_vect_simple,
+  grape_bivar,
+  by.x = "iso3_code",
+  by.y = "iso3c"
+)
+
+bivar_map_grape <- ggplot() +
+  theme_void(base_size = 14) + # Set a minimal theme for the map
+  geom_sf(data = sf::st_as_sf(grape_plt_sf), aes(fill = bi_class), color = NA) +
+  geom_sf(
+    data = st_as_sf(a0_vect_simple),
+    color = "black",
+    fill = NA,
+    size = 0.2
+  ) +
+  # Apply the bivariate color scale using the selected palette and dimensions
+  bi_scale_fill(pal = pallet, dim = 3, flip_axes = FALSE, rotate_pal = FALSE) +
+  theme(legend.position = "none")
+
+# Create the legend for the bivariate map
+bivar_legend_grape <- bi_legend(
+  pal = pallet,
+  flip_axes = FALSE,
+  rotate_pal = FALSE,
+  dim = 3,
+  xlab = "Human Resource Capacity",
+  ylab = "Ag R&D Spending",
+  size = 10
+) +
+  theme(
+    panel.background = element_blank(),
+    plot.background = element_blank()
+  )
+
+# Combine the map and legend using patchwork
+bivar_map_grape +
+  inset_element(
+    bivar_legend_grape,
+    left = 0.5,
+    bottom = 0,
+    right = 0.9,
+    top = 0.4
+  )
+
+# TODO: look at missing data for countries and see if that could be factor of ranking...
+# add TODO within key binds
+# Multi-code export interactive html?
+```
+
+:::
+
+```{r}
+#| column: page
+#| fig-width: 15
+#| fig-height: 15
+#| fig-align: center
+
+grape_plt_yr$cg_region <- a0_vect[
+  match(grape_plt_yr$iso3c, a0_vect$iso3_code),
+]$cg_region
+
+ggplot(
+  data = grape_plt_yr,
+  aes(
+    x = rd_pct_gdp,
+    y = reorder(iso3_factor, rd_pct_gdp),
+    fill = cg_region
+  )
+) +
+  geom_bar(stat = "identity") +
+  labs(
+    x = "Ag. R&D",
+    y = "Country",
+    title = "National Spending on Agricultural R&D relative to AG. GDP"
+  ) +
+  scale_y_discrete(labels = a0_labels) +
+  theme_minimal(base_size = fig_font_sz)
+
+ggplot(
+  data = grape_plt_yr,
+  aes(
+    x = hr_per_rpop,
+    y = reorder(iso3_factor, hr_per_rpop),
+    fill = cg_region
+  )
+) +
+  geom_bar(stat = "identity") +
+  labs(
+    x = "Human Resource avalability",
+    y = "Country",
+    title = "Human Resources for R&D per Rural Pop."
+  ) +
+  scale_y_discrete(labels = a0_labels) +
+  theme_minimal(base_size = fig_font_sz)
+```
+
+::: {.landscape}
+
+# AOW 1
+
+Note on legend: Higher need (blue) is negative and high capacity (orange) is
+positive
+
+```{r}
+#| include: false
+# AOW 1 - Advisory Need
+
+## Input Use
+inputs <- read.csv("data/aow1_digi-advisory/FAOSTAT_fert-inputs.csv")
+inputs$iso3 <- countrycode(inputs$Area, "country.name", "iso3c")
+inputs <- subset(inputs, iso3 %in% initial_countries & Year == plt_yr)
+input_use <- aggregate(data = inputs, Value ~ iso3, FUN = sum)
+input_use$gaul0_code <- a0_vect[
+  match(input_use$iso3, a0_vect$iso3_code),
+]$gaul0_code
+names(input_use) <- c("iso3", "input_use", "gaul0_code")
+
+## Production Value
+vop <- rast("data/aow1_digi-advisory/spam2010V2r0_global_total-vop_A.tif") |>
+  project(a0)
+vop_a0 <- zonal(vop, a0, fun = "sum", na.rm = TRUE)
+names(vop_a0) <- c("gaul0_code", "vop")
+vop_a0$vop <- vop_a0$vop / country_area$area_km2_ag
+
+## Yield Gap
+yg_files <- list.files(
+  "data/aow1_digi-advisory/yieldgap/",
+  full.names = TRUE,
+  pattern = ".tif$"
+)
+# normalize_rast <- \(x) { #TODO: this needs carried up further in script
+#   mnmx <- terra::minmax(x, compute = TRUE)
+#   x_min <- mnmx[1, ]
+#   x_max <- mnmx[2, ]
+#   x <- (x - x_min) / (x_max - x_min)
+#   return(x)
+# }
+
+gap_rast <- rast(yg_files) |>
+  project(a0)
+
+# gap_rast_norm <- mean(normalize_rast(gap_rast), na.rm = TRUE)
+a0_yg_gaps <- zonal(gap_rast, a0, fun = "mean", na.rm = TRUE)
+a0_yg_gaps <- a0_yg_gaps |>
+  mutate(across(
+    -gaul0_code,
+    ~ {
+      rng <- range(.x, na.rm = TRUE)
+      if (diff(rng) == 0) 0 else (.x - rng[1]) / diff(rng)
+    }
+  )) |>
+  mutate(total_gap = rowMeans(across(-gaul0_code), na.rm = TRUE))
+# a0_yg_norm <- zonal(gap_rast_norm, a0, fun = "mean", na.rm = TRUE)
+# a0_yg_gaps$gap_index <- a0_yg_norm$mean
+
+## merge indices
+aow1_need <- merge(
+  vop_a0,
+  a0_yg_gaps[c("gaul0_code", "total_gap")],
+  by = "gaul0_code"
+)
+
+aow1_need <- merge(input_use, aow1_need, by = "gaul0_code")
+
+aow1_need <- aow1_need |>
+  mutate(across(
+    -c(gaul0_code, iso3),
+    ~ {
+      rng <- range(.x, na.rm = TRUE)
+      if (diff(rng) == 0) 0 else (.x - rng[1]) / diff(rng)
+    }
+  )) |>
+  mutate(
+    need_idx = rowMeans(across(-c(gaul0_code, iso3)))
+  )
+
+ggplot(
+  aow1_need,
+  aes(x = reorder(iso3, need_idx), fill = gaul0_code, y = need_idx)
+) +
+  geom_bar(stat = "identity")
+```
+
+```{r}
+#| include: false
+# AOW 1 - Delivery Capacity
+
+## Weather Station Density
+wstation_rast <- rast(
+  "data/aow1_digi-advisory/weather_station_density_k10.tif"
+) |>
+  project(a0)
+wstation_a0 <- zonal(wstation_rast, a0, fun = "mean", na.rm = TRUE)
+names(wstation_a0) <- c("gaul0_code", "wstation_density")
+
+## Education Attainment
+education_rast <- rast("data/urgency/IHME_eduAttain.tif") |>
+  project(a0)
+education_a0 <- zonal(education_rast, a0, fun = "mean", na.rm = TRUE)
+names(education_a0) <- c("gaul0_code", "edu_attain")
+
+## Internet Speed
+ookla_rast <- rast("data/aow1_digi-advisory/ookla_mobileInternet.tif") |>
+  project(a0)
+ookla_a0 <- zonal(ookla_rast, a0, fun = "mean", na.rm = TRUE)
+names(ookla_a0) <- c("gaul0_code", "ookla_d_speed")
+
+## EBA/Business Ease
+eba_df <- read.csv(
+  "data/aow1_digi-advisory/EBA-enablebusiness.csv",
+  skip = 1
+) |>
+  subset(Code %in% initial_countries, select = c("Code", "Overall.Score"))
+names(eba_df) <- c("iso3c", "EBA_score")
+eba_df$gaul0_code <- a0_vect[
+  match(eba_df$iso3c, a0_vect$iso3_code),
+]$gaul0_code
+
+
+## Network Readiness
+net_ready_df <- read_excel(
+  "data/aow1_digi-advisory/network_ready_index.xlsx",
+  col_names = FALSE
+)
+names(net_ready_df) <- as.character(unlist(net_ready_df[136, ])) # 2nd to last row is col names...
+net_ready_df <- net_ready_df[1:135, ] |>
+  subset(ISO3Code %in% initial_countries, select = c("ISO3Code", "NRI.score"))
+net_ready_df$NRI.score <- as.numeric(net_ready_df$NRI.score)
+names(net_ready_df) <- c("iso3c", "NRI_score")
+net_ready_df$gaul0_code <- a0_vect[
+  match(net_ready_df$iso3c, a0_vect$iso3_code),
+]$gaul0_code
+
+## merge indices
+eba_df <- eba_df[c("gaul0_code", "EBA_score")]
+net_ready_df <- net_ready_df[c("gaul0_code", "NRI_score")]
+
+aow1_digi <- Reduce(
+  function(x, y) merge(x, y, by = "gaul0_code", all.x = TRUE),
+  list(
+    wstation_a0,
+    education_a0,
+    ookla_a0,
+    eba_df,
+    net_ready_df
+  )
+)
+aow1_digi$iso3c <- a0_vect$iso3_code[match(
+  aow1_digi$gaul0_code,
+  a0_vect$gaul0_code
+)]
+aow1_digi <- aow1_digi |>
+  mutate(across(
+    -c(gaul0_code, iso3c),
+    ~ {
+      rng <- range(.x, na.rm = TRUE)
+      if (diff(rng) == 0) 0 else (.x - rng[1]) / diff(rng)
+    }
+  )) |>
+  mutate(capacity_idx = rowMeans(across(-c(gaul0_code, iso3c)), na.rm = TRUE))
+
+ggplot(
+  aow1_digi,
+  aes(x = reorder(iso3c, capacity_idx), fill = gaul0_code, y = capacity_idx)
+) +
+  geom_bar(stat = "identity")
+```
+
+```{r}
+#| column: page
+#| fig-width: 18
+#| fig-height: 12
+#| fig-align: center
+
+# bivariate map
+aow1 <- merge(aow1_digi, aow1_need, by = "gaul0_code")[c(
+  "gaul0_code",
+  "capacity_idx",
+  "need_idx"
+)]
+
+aow1_bivar <- bi_class(
+  aow1,
+  capacity_idx,
+  need_idx,
+  style = "quantile",
+  dim = 3
+)
+aow1_sf <- terra::merge(a0_vect_simple, aow1_bivar, by = "gaul0_code")
+
+# Create the bivariate map using ggplot2
+pallet <- "BlueOr"
+bivar_map1 <- ggplot() +
+  theme_void(base_size = 14) + # Set a minimal theme for the map
+  geom_sf(data = sf::st_as_sf(aow1_sf), aes(fill = bi_class), color = NA) +
+  geom_sf(
+    data = sf::st_as_sf(a0_vect_simple),
+    color = "black",
+    fill = NA,
+    size = 0.2
+  ) +
+  # Apply the bivariate color scale using the selected palette and dimensions
+  bi_scale_fill(pal = pallet, dim = 3, flip_axes = FALSE, rotate_pal = FALSE) +
+  theme(legend.position = "none")
+
+# Create the legend for the bivariate map
+bivar_legend1 <- bi_legend(
+  pal = pallet,
+  flip_axes = FALSE,
+  rotate_pal = FALSE,
+  dim = 3,
+  xlab = "Capacity",
+  ylab = "Need",
+  size = 10
+) +
+  theme(
+    panel.background = element_blank(),
+    plot.background = element_blank()
+  )
+
+# Combine the map and legend using patchwork
+bivar_map1 +
+  inset_element(bivar_legend1, left = 0.5, bottom = 0, right = 0.9, top = 0.4)
+```
+
+# AOW 2
+
+Note on legend: High shock value (blue) is negative and High resilience (orange)
+is positive
+
+```{r}
+#| output: false
+# AOW 2 - Shock Exposure
+# TODO: These could be area classsed as all raster...
+
+## Rain Variability
+chirps_cv <- rast(
+  "data/aow2_shocks/precip_cv_historical_mean.tif"
+) |>
+  project(a0)
+chirps_cv_a0 <- zonal(chirps_cv, a0, fun = "mean", na.rm = TRUE)
+names(chirps_cv_a0) <- c("gaul0_code", "chirps_cv")
+
+## Drought
+spei6 <- rast("data/aow2_shocks/spei6_severity.tif") |> # unit = yr where spei < -1
+  project(a0)
+spei6_a0 <- zonal(spei6, a0, fun = "mean", na.rm = TRUE)
+names(spei6_a0) <- c("gaul0_code", "spei6")
+
+## Flood
+flood <- rast("data/aow2_shocks/floodMapGL_rp20y.tif") |> # unit = meter
+  project(a0)
+flood_a0 <- zonal(flood, a0, fun = "mean", na.rm = TRUE)
+names(flood_a0) <- c("gaul0_code", "flood")
+
+## Pest and Disease
+rhor_files <- list.files(
+  "data/aow2_shocks/ssp370_2100_pest_yield_impact_pct",
+  full.names = TRUE
+)
+rhor_rast <- rast(rhor_files) |>
+  project(a0)
+crops <- lapply(strsplit(names(rhor_rast), "_"), `[`, 3)
+names(rhor_rast) <- crops
+
+rhor_a0 <- zonal(rhor_rast, a0, fun = "mean", na.rm = TRUE)
+rhor_a0$avg_pest_impact <- rowMeans(rhor_a0[unlist(crops)], na.rm = TRUE)
+
+aow2_shocks <- Reduce(
+  \(x, y) merge(x, y, by = "gaul0_code", all.x = TRUE),
+  list(
+    rhor_a0,
+    flood_a0,
+    spei6_a0,
+    chirps_cv_a0
+  )
+)
+aow2_shocks$iso3c <- a0_vect[
+  match(aow2_shocks$gaul0_code, a0_vect$gaul0_code),
+]$iso3_code
+
+aow2_shocks_idx <- aow2_shocks |>
+  mutate(across(
+    -c(gaul0_code, iso3c),
+    ~ {
+      rng <- range(.x, na.rm = TRUE)
+      if (diff(rng) == 0) 0 else (.x - rng[1]) / diff(rng)
+    }
+  )) |>
+  mutate(shock_idx = rowMeans(across(-c(gaul0_code, iso3c)), na.rm = TRUE))
+
+ggplot(aow2_shocks_idx, aes(x = shock_idx, y = reorder(iso3c, shock_idx))) +
+  geom_col()
+```
+
+```{r}
+#| output: false
+
+## Internet Speed
+# ookla_a0 # already extracted
+
+## GRDI
+grdi_rast <- rast("data/aow2_shocks/grdi_povmap.tif") |>
+  project(a0)
+grdi_a0 <- zonal(grdi_rast, a0, fun = "mean", na.rm = TRUE)
+names(grdi_a0) <- c("gaul0_code", "grdi")
+# Invert to match the other indicators where high = positive resiliance
+grdi_a0$grdi <- with(
+  grdi_a0,
+  (max(grdi, na.rm = TRUE) + min(grdi, na.rm = TRUE)) - grdi
+)
+
+## Finance services
+wb_findex_accounts <- read.csv(
+  # TODO: need to invert or invert grdi
+  "data/aow2_shocks/WB_FINDEX_ACCOUNT-OWNERSHIP.csv"
+) |>
+  subset(
+    REF_AREA %in%
+      initial_countries &
+      SEX == "_T" &
+      AGE == "Y_GE15" &
+      URBANISATION == "RUR" &
+      TOTAL == "_T",
+    select = c(REF_AREA, X2024)
+  )
+names(wb_findex_accounts) <- c("iso3c", "pct_rpop_bank_accounts")
+wb_findex_accounts$gaul0_code <- a0_vect[
+  match(wb_findex_accounts$iso3c, a0_vect$iso3_code),
+]$gaul0_code
+
+## CIS ?????
+
+aow2_resilience <- Reduce(
+  \(x, y) merge(x, y, by = "gaul0_code", all.x = TRUE),
+  list(
+    ookla_a0,
+    grdi_a0,
+    wb_findex_accounts[, -1]
+  )
+)
+aow2_resilience$iso3c <- a0_vect[
+  match(aow2_resilience$gaul0_code, a0_vect$gaul0_code),
+]$iso3_code
+
+aow2_resilience_idx <- aow2_resilience |>
+  mutate(across(
+    -c(gaul0_code, iso3c),
+    ~ {
+      rng <- range(.x, na.rm = TRUE)
+      if (diff(rng) == 0) 0 else (.x - rng[1]) / diff(rng)
+    }
+  )) |>
+  mutate(resilience_idx = rowMeans(across(-c(gaul0_code, iso3c)), na.rm = TRUE))
+```
+
+```{r}
+#| column: page
+#| fig-width: 18
+#| fig-height: 12
+#| fig-align: center
+
+aow2 <- merge(aow2_shocks_idx, aow2_resilience_idx, by = c("gaul0_code"))[c(
+  "gaul0_code",
+  "shock_idx",
+  "resilience_idx"
+)]
+
+aow2_bivar <- bi_class(
+  aow2,
+  resilience_idx,
+  shock_idx,
+  style = "quantile",
+  dim = 3
+)
+
+aow2_sf <- terra::merge(a0_vect_simple, aow2_bivar, by = c("gaul0_code"))
+
+# Create the bivariate map using ggplot2
+pallet <- "BlueOr"
+bivar_map2 <- ggplot() +
+  theme_void(base_size = 14) + # Set a minimal theme for the map
+  geom_sf(data = sf::st_as_sf(aow2_sf), aes(fill = bi_class), color = NA) +
+  geom_sf(
+    data = sf::st_as_sf(a0_vect_simple),
+    color = "black",
+    fill = NA,
+    size = 0.2
+  ) +
+  # Apply the bivariate color scale using the selected palette and dimensions
+  bi_scale_fill(pal = pallet, dim = 3, flip_axes = FALSE, rotate_pal = FALSE) +
+  theme(legend.position = "none")
+
+# Create the legend for the bivariate map
+bivar_legend2 <- bi_legend(
+  pal = pallet,
+  flip_axes = FALSE,
+  rotate_pal = FALSE,
+  dim = 3,
+  xlab = "Resilience",
+  ylab = "Shocks",
+  size = 10
+) +
+  theme(
+    panel.background = element_blank(),
+    plot.background = element_blank()
+  )
+
+# Combine the map and legend using patchwork
+bivar_map2 +
+  inset_element(bivar_legend2, left = 0.5, bottom = 0, right = 0.9, top = 0.4)
+```
+
+# AOW 3
+
+Note on legend: Higher constraints (blue) is negative and high capacity (orange)
+is positive
+
+```{r}
+#| output: false
+
+## AOW 3 - Constraint Burden
+# High = bad
+
+## Soil PH
+ph_files <- list.files(
+  "data/aow3_constraints",
+  full.names = TRUE,
+  pattern = "phh2o"
+)
+ph_rast <- sprc(ph_files) |>
+  merge() |>
+  project(a0) # Saved in 2 tiles so merge together
+
+ph_a0 <- zonal(ph_rast, a0, fun = "mean", na.rm = TRUE) # TODO: this should be thresholded?
+names(ph_a0) <- c("gaul0_code", "ph")
+
+## Soil Health (SOC)
+soc_files <- list.files(
+  "data/aow3_constraints",
+  full.names = TRUE,
+  pattern = "soc"
+)
+soc_rast <- sprc(soc_files) |>
+  merge() |>
+  project(a0)
+soc_a0 <- zonal(soc_rast, a0, fun = "mean", na.rm = TRUE)
+names(ph_a0) <- c("gaul0_code", "soc")
+
+## Crop Diversity (shannon diversity)
+cropgrid_diversity <- rast("data/aow3_constraints/shannon_diversity.tif") |>
+  project(a0)
+diversity_a0 <- zonal(cropgrid_diversity, a0, fun = "mean", na.rm = TRUE)
+names(diversity_a0) <- c("gaul0_code", "diversity")
+diversity_a0$crop_diversity <- with(
+  # inverse as diversity = positive
+  diversity_a0,
+  (max(diversity, na.rm = TRUE) + min(diversity, na.rm = TRUE)) - diversity
+)
+
+## Soil Degradation
+
+## aow3 - constraints index
+aow3_constraints <- Reduce(
+  \(x, y) merge(x, y, by = "gaul0_code", all.x = TRUE),
+  list(
+    ph_a0,
+    soc_a0,
+    diversity_a0
+  )
+)
+
+aow3_constraints$iso3c <- a0_vect[
+  match(aow3_constraints$gaul0_code, a0_vect$gaul0_code),
+]$iso3_code
+
+aow3_constraints_idx <- aow3_constraints |>
+  mutate(across(
+    -c(gaul0_code, iso3c),
+    ~ {
+      rng <- range(.x, na.rm = TRUE)
+      if (diff(rng) == 0) 0 else (.x - rng[1]) / diff(rng)
+    }
+  )) |>
+  mutate(
+    constraint_idx = rowMeans(across(-c(gaul0_code, iso3c)), na.rm = TRUE)
+  )
+
+ggplot(
+  aow3_constraints_idx,
+  aes(x = constraint_idx, y = reorder(iso3c, constraint_idx))
+) +
+  geom_col()
+```
+
+```{r}
+#| output: false
+# AOW 3 - Enabling Environment
+# positive = good
+
+## Market Access
+market_rast <- rast("data/aow3_constraints/nelson_marketTime.tif") |>
+  project(a0)
+
+market_a0 <- zonal(market_rast, a0, fun = "mean", na.rm = TRUE)
+names(market_a0) <- c("gaul0_code", "market_access")
+
+## Mechanization
+mech_df <- read.csv(
+  "data/aow3_constraints/machinery-per-agricultural-land.csv"
+) |>
+  subset(Year == plt_yr)
+west_af_val <- mech_df[mech_df$Entity == "West Africa", "machinery_per_ag_land"]
+civ_mech_df <- data.frame(Code = "CIV", machinery_per_ag_land = west_af_val)
+mech_df <- mech_df |>
+  subset(
+    Code %in% initial_countries & Year == plt_yr,
+    select = c("Code", "machinery_per_ag_land")
+  )
+
+mech_df <- rbind(mech_df, civ_mech_df)
+mech_df$gaul0_code <- a0_vect[
+  match(mech_df$Code, a0_vect$iso3_code),
+]$gaul0_code
+names(mech_df) <- c("iso3c", "machinery_per_ag_land", "gaul0_code")
+# mech2 <- read.csv("data/aow3_constraints/tractor_100km.csv",skip = 3) |> # super dated
+#   subset(Country.Code %in% initial_countries, select = c("Country.Code", sprintf("X%s", plt_yr)))
+
+## Bank access
+# Already done in above section
+# wb_findex_accounts
+
+## Labor force - rural pop density?
+# rpop <- rast("data/urgency/wpop_rural_pop.tif")
+# rpop_density <- rpop / cellSize(rpop, unit = "km")
+# writeRaster(rpop_density, "data/urgency/wpop_rural_pop_density.tif", filetype = "COG")
+rpop_density <- rast("data/urgency/wpop_rural_pop_density.tif") |>
+  project(a0)
+
+rpop_density_a0 <- zonal(rpop_density, a0, fun = "mean", na.rm = TRUE)
+names(rpop_density_a0) <- c("gaul0_code", "rpop_density")
+
+## Index
+
+aow3_capacity <- Reduce(
+  \(x, y) merge(x, y, by = "gaul0_code", all.x = TRUE),
+  list(
+    rpop_density_a0,
+    mech_df,
+    market_a0,
+    wb_findex_accounts[, -1]
+  )
+)
+
+aow3_capacity_idx <- aow3_capacity |>
+  mutate(across(
+    -c(gaul0_code, iso3c),
+    ~ {
+      rng <- range(.x, na.rm = TRUE)
+      if (diff(rng) == 0) 0 else (.x - rng[1]) / diff(rng)
+    }
+  )) |>
+  mutate(capacity_idx = rowMeans(across(-c(gaul0_code, iso3c)), na.rm = TRUE))
+
+ggplot(
+  aow3_capacity_idx,
+  aes(x = capacity_idx, y = reorder(iso3c, capacity_idx))
+) +
+  geom_col()
+```
+
+```{r}
+#| column: page
+#| fig-width: 18
+#| fig-height: 12
+#| fig-align: center
+
+aow3 <- merge(aow3_constraints_idx, aow3_capacity_idx, by = c("gaul0_code"))[c(
+  "gaul0_code",
+  "constraint_idx",
+  "capacity_idx"
+)]
+
+aow3_bivar <- bi_class(
+  aow3,
+  capacity_idx,
+  constraint_idx,
+  style = "quantile",
+  dim = 3
+)
+
+aow3_sf <- terra::merge(a0_vect_simple, aow3_bivar, by = c("gaul0_code"))
+
+bivar_map3 <- ggplot() +
+  theme_void(base_size = 14) + # Set a minimal theme for the map
+  geom_sf(data = sf::st_as_sf(aow3_sf), aes(fill = bi_class), color = NA) +
+  geom_sf(
+    data = sf::st_as_sf(a0_vect_simple),
+    color = "black",
+    fill = NA,
+    size = 0.2
+  ) +
+  # Apply the bivariate color scale using the selected palette and dimensions
+  bi_scale_fill(pal = pallet, dim = 3, flip_axes = FALSE, rotate_pal = FALSE) +
+  theme(legend.position = "none")
+
+# Create the legend for the bivariate map
+bivar_legend3 <- bi_legend(
+  pal = pallet,
+  flip_axes = FALSE,
+  rotate_pal = FALSE,
+  dim = 3,
+  xlab = "Capacity",
+  ylab = "Constraints",
+  size = 10
+) +
+  theme(
+    panel.background = element_blank(),
+    plot.background = element_blank()
+  )
+
+# Combine the map and legend using patchwork
+bivar_map3 +
+  inset_element(bivar_legend3, left = 0.5, bottom = 0, right = 0.9, top = 0.4)
+```
+
+:::
+
+## Discussion Points
+
+### Farm System vs. Crop production systems
+
+There has been a lot of discussion about how to prioritize countries between or
+based on system. There needs to be a general consensus on where this step takes
+place, if the prioritization is based on crop or Dixon/similar system, and how
+crop-systems would be defined for each area (k-means clustering, top 3 crops,
+etc).
+
+### Thresholds
+
+If we use the current approach, the group should agree on thresholds for
+variables. If thresholds are not set the variables will be classed and
+normalized based on their distributions
+
+### Variables Included
+
+The above variables were included based on availability and relevance. A
+preference was given to variables that were available in raster format or as
+sub-national data rather than admin 0 data. There should be agreement on the
+variables included and variables can be added and removed as needed.

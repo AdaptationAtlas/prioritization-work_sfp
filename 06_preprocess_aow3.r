@@ -5,12 +5,19 @@ library(nanoparquet)
 # --- Setup ---
 a0_vect <- vect("data/bounds_a0.parquet")
 a0 <- rast("data/results/bounds_a0.tif")
+ag_area <- rast("data/results/bounds_ag-area.tif")
+a0_areas <- read_parquet("data/results/bounds_country-area.parquet")
 
 plt_yr <- 2019
+
+COUNTRY_SUBSET <- TRUE
+initial_countries <- read.csv("data/initial_prioritization.csv")$ISO3
+countries <- if (COUNTRY_SUBSET) initial_countries else a0_vect$iso3_code
 
 # --- Constraint Burden ---
 
 ## Soil PH
+ph_threshols <- c(5, 7.5) # unit = pH - below 5 is poor, above 7.5 is poor
 ph_files <- list.files(
   "data/aow3_constraints",
   full.names = TRUE,
@@ -20,8 +27,13 @@ ph_rast <- sprc(ph_files) |>
   merge() |>
   project(a0) # Saved in 2 tiles so merge together
 
-ph_a0 <- zonal(ph_rast, a0, fun = "mean", na.rm = TRUE) # TODO: this should be thresholded?
-names(ph_a0) <- c("gaul0_code", "ph")
+ph_mask <- ph_rast < ph_threshols[1] | ph_rast > ph_threshols[2]
+
+ph_area <- mask(ag_area, ph_mask, maskvalue = c(FALSE, NA))
+ph_area[is.na(ph_area)] <- 0
+ph_a0 <- zonal(ph_area, a0, fun = "sum", na.rm = TRUE)
+
+names(ph_a0) <- c("gaul0_code", "bad_ph_area")
 
 ## Soil Health (SOC)
 soc_files <- list.files(
@@ -32,8 +44,11 @@ soc_files <- list.files(
 soc_rast <- sprc(soc_files) |>
   merge() |>
   project(a0)
+mnmx <- minmax(soc_rast, compute = TRUE)
+soc_rast <- mnmx[2, ] + mnmx[1, ] - soc_rast
+
 soc_a0 <- zonal(soc_rast, a0, fun = "mean", na.rm = TRUE)
-names(soc_a0) <- c("gaul0_code", "soc")
+names(soc_a0) <- c("gaul0_code", "soc_invserse")
 
 ## Crop Diversity (shannon diversity)
 cropgrid_diversity <- rast("data/aow3_constraints/shannon_diversity.tif") |>
@@ -48,13 +63,20 @@ diversity_a0$crop_diversity <- with(
 
 ## Soil Degradation
 
+## Gren Water Scarcity
+gws_rast <- rast("data/aow3_constraints/green-water-scarcity_baseline.tif") |>
+  project(a0)
+gws_a0 <- zonal(gws_rast, a0, fun = "mean", na.rm = TRUE)
+names(gws_a0) <- c("gaul0_code", "gws")
+
 ## aow3 - constraints index
 aow3_constraints <- Reduce(
   \(x, y) merge(x, y, by = "gaul0_code", all.x = TRUE),
   list(
     ph_a0,
     soc_a0,
-    diversity_a0
+    diversity_a0,
+    gws_a0
   )
 )
 
@@ -74,7 +96,6 @@ aow3_constraints_idx <- aow3_constraints |>
     constraint_idx = rowMeans(across(-c(gaul0_code, iso3c)), na.rm = TRUE)
   )
 
-
 # --- Enabling Environment ---
 
 ## Market Access
@@ -87,17 +108,19 @@ names(market_a0) <- c("gaul0_code", "market_access")
 ## Mechanization
 mech_df <- read.csv(
   "data/aow3_constraints/machinery-per-agricultural-land.csv"
-) |>
-  subset(Year == plt_yr)
-west_af_val <- mech_df[mech_df$Entity == "West Africa", "machinery_per_ag_land"]
+)
+west_af_val <- mech_df[
+  mech_df$Entity == "West Africa" & mech_df$Year == plt_yr,
+  "machinery_per_ag_land"
+]
 civ_mech_df <- data.frame(Code = "CIV", machinery_per_ag_land = west_af_val)
 mech_df <- mech_df |>
   subset(
-    Year == plt_yr,
+    Year == plt_yr & Code %in% countries,
     select = c("Code", "machinery_per_ag_land")
   )
-
 mech_df <- rbind(mech_df, civ_mech_df)
+
 mech_df$gaul0_code <- a0_vect$gaul0_code[
   match(mech_df$Code, a0_vect$iso3_code)
 ]
@@ -114,7 +137,9 @@ wb_findex_accounts <- read.csv(
   "data/aow2_shocks/WB_FINDEX_ACCOUNT-OWNERSHIP.csv"
 ) |>
   subset(
-    SEX == "_T" &
+    REF_AREA %in%
+      countries &
+      SEX == "_T" &
       AGE == "Y_GE15" &
       URBANISATION == "RUR" &
       TOTAL == "_T",

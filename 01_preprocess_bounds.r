@@ -4,9 +4,13 @@ library(nanoparquet)
 # --- Constants  ---
 TLU_THRESHOLD <- 0.4 # TLU threshold for livestock areas
 CROPLAND_THRESHOLD <- 10 # Minimum % cropland per cell
+COUNTRY_SUBSET <- TRUE
 
 # --- Boundarys and zonal rasters  ---
 a0_vect <- vect("data/bounds_a0.parquet")
+initial_countries <- read.csv("data/initial_prioritization.csv")$ISO3
+countries <- if (COUNTRY_SUBSET) initial_countries else a0_vect$iso3_code
+a0_vect <- subset(a0_vect, iso3_code %in% countries, NSE = TRUE)
 a0_vect_simple <- vect("data/a0_vect_vsimple.topojson")
 tlu_mask <- rast("data/tlu.tif") > TLU_THRESHOLD
 cropland_rast <- rast("data/Global_cropland_3km_2019.tif")
@@ -99,4 +103,5 @@ writeRaster(a0_sys, "data/results/bounds_a0-farmsys.tif", overwrite = TRUE)
 writeRaster(ag_cells, "data/results/bounds_ag-cells.tif", overwrite = TRUE)
 writeRaster(cell_area_ag, "data/results/bounds_ag-area.tif", overwrite = TRUE)
 write_parquet(a0_sys_area, "data/results/bounds_area.parquet")
+write_parquet(country_area, "data/results/bounds_country-area.parquet")
 write_parquet(area_lookup, "data/results/mdata_area-lookup.parquet")

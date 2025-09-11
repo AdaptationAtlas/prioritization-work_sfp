@@ -9,6 +9,10 @@ country_area <- read_parquet("data/results/mdata_area-lookup.parquet") |>
     level == "admin0"
   )
 
+COUNTRY_SUBSET <- TRUE
+initial_countries <- read.csv("data/initial_prioritization.csv")$ISO3
+countries <- if (COUNTRY_SUBSET) initial_countries else a0_vect$iso3_code
+
 # --- Shock Exposure ---
 ## Rain Variability
 chirps_cv <- rast(
@@ -91,9 +95,9 @@ wb_findex_accounts <- read.csv(
   "data/aow2_shocks/WB_FINDEX_ACCOUNT-OWNERSHIP.csv"
 ) |>
   subset(
-    # REF_AREA %in%
-    # initial_countries &
-    SEX == "_T" &
+    REF_AREA %in%
+      countries &
+      SEX == "_T" &
       AGE == "Y_GE15" &
       URBANISATION == "RUR" &
       TOTAL == "_T",

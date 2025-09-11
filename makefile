@@ -19,22 +19,22 @@ all: $(R_OUTPUTS) $(QMD_OUTPUTS)
 
 # Rules for R scripts
 $(BOUNDS): 01_preprocess_bounds.r
-	Rscript $< -o $@ >& >/dev/null
+	Rscript $< -o $@ >/dev/null
 
 $(URGENCY): 02_preprocess_urgency.r $(BOUNDS)
-	Rscript $< -o $@ >& >/dev/null
+	Rscript $< -o $@ >/dev/null
 
 $(GRAPE): 03_preprocess_grape.r $(URGENCY)
-	Rscript $< -o $@ >& >/dev/null
+	Rscript $< -o $@ >/dev/null
 
 $(AOW1): 04_preprocess_aow1.r $(GRAPE)
-	Rscript $< -o $@ >& >/dev/null
+	Rscript $< -o $@ >/dev/null
 
 $(AOW2): 05_preprocess_aow2.r $(AOW1)
-	Rscript $< -o $@ >& >/dev/null
+	Rscript $< -o $@ >/dev/null
 
 $(AOW3): 06_preprocess_aow3.r $(AOW2)
-	Rscript $< -o $@ >& >/dev/null
+	Rscript $< -o $@ >/dev/null
 
 country_analysis.pdf: country_analysis.qmd $(R_OUTPUTS)
 	quarto render $<

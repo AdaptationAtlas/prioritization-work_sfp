@@ -39,11 +39,11 @@ $(AOW3): 06_preprocess_aow3.r $(AOW2)
 country_analysis.pdf: country_analysis.qmd $(R_OUTPUTS)
 	quarto render $<
 
-sfp_report_REFACTOR.pdf: sfp_report_REFACTOR.qmd $(R_OUTPUTS)
+sfp_report.pdf: sfp_report.qmd $(R_OUTPUTS)
 	quarto render $<
 
 # Utility
 clean:
-	rm -f $(RESULTS_DIR)/*.parquet *.pdf
+	rm -f $(RESULTS_DIR)/*.parquet
 
 .PHONY: all clean

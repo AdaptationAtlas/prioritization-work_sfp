@@ -40,18 +40,16 @@ library(terra)
 library(sf)
 library(dplyr)
 library(ggplot2)
+library(biscale)
+library(ggrepel) # Only needed for plot in appendix. Remove if not needed
 
-min_max_norm <- function(x) {
-  (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
-}
-
-COUNTRY_SUBSET <- TRUE # Subset initial prioritization countries fron Oscar?
-a0_sf_simple <- read_sf("data/a0_vect_vsimple.topojson")
+# Subset initial prioritization countries fron Oscar?
+# TODO: Remove - this step happens earlier in the pipeline, so no longer needed
+COUNTRY_SUBSET <- TRUE a0_sf_simple <- read_sf("data/a0_vect_vsimple.topojson")
 initial_countries <- read.csv("data/initial_prioritization.csv")$ISO3
 countries <- if (COUNTRY_SUBSET) initial_countries else a0_sf_simple$iso3_code
 
-
-prettyprint_countries <- compiler::cmpfun(function(iso3c) {
+prettyprint_countries <- function(iso3c) {
   country_names <- a0_sf_simple$gaul0_name[match(iso3c, a0_sf_simple$iso3_code)]
   fmat_countries <- sprintf("%s (%s)", country_names, iso3c)
   n_countries <- length(iso3c)
@@ -61,7 +59,7 @@ prettyprint_countries <- compiler::cmpfun(function(iso3c) {
     paste0(fmat_countries, collapse = ", ")
   )
   cat(pretty_str)
-})
+}
 ```
 
 ## Urgency
@@ -103,15 +101,6 @@ urgency_ranks <- urgency_a0[c(
     .names = "{.col}_rank"
   )) |>
   arrange(desc(composite_index))
-#
-# x <- urgency_ranks$vuln_index
-# urgency_ranks$vuln_cut <- cut(
-#   urgency_ranks$vuln_index,
-#   quantile(x[x > 0], na.rm = TRUE),
-#   include.lowest = TRUE
-# )
-# y <- urgency_ranks$expo_index
-#
 
 urgency_top20 <- urgency_ranks |>
   subset(
@@ -145,7 +134,7 @@ urgency_sf <- merge(a0_sf_simple, urgency_ranks, by = "gaul0_code") |>
   )
 
 ggplot() +
-  theme_void(base_size = 14) + # Set a minimal theme for the map
+  theme_void(base_size = 14) + 
   geom_sf(data = urgency_sf, aes(fill = priority_group), color = NA) +
   geom_sf(
     data = st_as_sf(a0_sf_simple),
@@ -186,7 +175,8 @@ prettyprint_countries(urg_hotspot_3_1$iso3c)
 
 #### Strained Systems
 
-These countries face high levels of vulnerability and have a moderate production and population density.
+These countries face high levels of vulnerability and have a moderate production
+and population density.
 
 ```{r}
 #| output: asis
@@ -348,8 +338,8 @@ prettyprint_countries(aow1_hotspot_3_3$iso3c)
 
 ```{r}
 # --- AOW 2 ---
-aow2_shocks_idx <- read_parquet("data/results/aow2_shocks.parquet")
-aow2_resilience_idx <- read_parquet("data/results/aow2_resilience.parquet")
+aow2_shocks_idx <- read_parquet("data/results/aow2_shocks.parquet") # high value = more shocks
+aow2_resilience_idx <- read_parquet("data/results/aow2_resilience.parquet") # high value = more resilience
 
 aow2 <- merge(aow2_shocks_idx, aow2_resilience_idx, by = c("gaul0_code"))[c(
   "gaul0_code",
@@ -445,8 +435,8 @@ prettyprint_countries(aow2_hotspot_3_2$iso3c)
 
 ```{r}
 # --- AOW 3 ---
-aow3_constraints_idx <- read_parquet("data/results/aow3_constraints.parquet")
-aow3_capacity_idx <- read_parquet("data/results/aow3_capacity.parquet")
+aow3_constraints_idx <- read_parquet("data/results/aow3_constraints.parquet") # high value = more constraints
+aow3_capacity_idx <- read_parquet("data/results/aow3_capacity.parquet") # high value = more capacity
 
 aow3 <- merge(aow3_constraints_idx, aow3_capacity_idx, by = c("gaul0_code"))[c(
   "gaul0_code",
@@ -492,7 +482,7 @@ aow3_sf <- merge(a0_sf_simple, aow3, by = "gaul0_code") |>
   )
 
 ggplot() +
-  theme_void(base_size = 14) + # Set a minimal theme for the map
+  theme_void(base_size = 14) + 
   geom_sf(data = aow3_sf, aes(fill = priority_group), color = NA) +
   geom_sf(
     data = st_as_sf(a0_sf_simple),
@@ -553,8 +543,8 @@ grape_df <- subset(grape_df, iso3c %in% countries)
 
 grape_df <- biscale::bi_class(
   grape_df,
-  hr_per_rpop,
-  rd_pct_gdp,
+  hr_per_rpop, # Human Resources per rural population
+  rd_pct_gdp, # R&D as a share of Ag GDP
   style = "quantile",
   dim = 3
 )

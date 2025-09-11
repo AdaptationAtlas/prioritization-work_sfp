@@ -1,2 +1,7 @@
 /.quarto/
 .conform*
+data/*
+!data/results/
+!data/results/**
+sfp_report_files/*
+*.pdf

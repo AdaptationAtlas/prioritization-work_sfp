@@ -46,14 +46,13 @@ min_max_norm <- function(x) {
 }
 
 COUNTRY_SUBSET <- TRUE # Subset initial prioritization countries fron Oscar?
-a0_vect <- vect("data/bounds_a0.parquet")
+a0_sf_simple <- read_sf("data/a0_vect_vsimple.topojson")
 initial_countries <- read.csv("data/initial_prioritization.csv")$ISO3
-countries <- if (COUNTRY_SUBSET) initial_countries else a0_vect$iso3_code
-a0_sf_simple <- read_sf("data/a0_vect_vsimple.topojson") |>
-  subset(gaul0_code %in% a0_vect$gaul0_code)
+countries <- if (COUNTRY_SUBSET) initial_countries else a0_sf_simple$iso3_code
+
 
 prettyprint_countries <- compiler::cmpfun(function(iso3c) {
-  country_names <- a0_vect$gaul0_name[match(iso3c, a0_vect$iso3_code)]
+  country_names <- a0_sf_simple$gaul0_name[match(iso3c, a0_sf_simple$iso3_code)]
   fmat_countries <- sprintf("%s (%s)", country_names, iso3c)
   n_countries <- length(iso3c)
   pretty_str <- sprintf(
@@ -75,9 +74,9 @@ prettyprint_countries <- compiler::cmpfun(function(iso3c) {
 urgency_a0 <- read_parquet("data/results/urgency.parquet") |>
   subset(boundary_id == "gaul0_code")
 
-urgency_a0$iso3c <- a0_vect$iso3_code[match(
+urgency_a0$iso3c <- a0_sf_simple$iso3_code[match(
   urgency_a0$gaul0_code,
-  a0_vect$gaul0_code
+  a0_sf_simple$gaul0_code
 )]
 
 urgency_a0 <- subset(urgency_a0, iso3c %in% countries)
@@ -232,9 +231,9 @@ aow1 <- merge(aow1_digi, aow1_need, by = "gaul0_code")[c(
   "capacity_idx",
   "need_idx"
 )]
-aow1$iso3c <- a0_vect$iso3_code[match(
+aow1$iso3c <- a0_sf_simple$iso3_code[match(
   aow1$gaul0_code,
-  a0_vect$gaul0_code
+  a0_sf_simple$gaul0_code
 )]
 
 aow1 <- subset(aow1, iso3c %in% countries)
@@ -357,9 +356,9 @@ aow2 <- merge(aow2_shocks_idx, aow2_resilience_idx, by = c("gaul0_code"))[c(
   "shock_idx",
   "resilience_idx"
 )]
-aow2$iso3c <- a0_vect$iso3_code[match(
+aow2$iso3c <- a0_sf_simple$iso3_code[match(
   aow2$gaul0_code,
-  a0_vect$gaul0_code
+  a0_sf_simple$gaul0_code
 )]
 
 aow2 <- subset(aow2, iso3c %in% countries)
@@ -454,9 +453,9 @@ aow3 <- merge(aow3_constraints_idx, aow3_capacity_idx, by = c("gaul0_code"))[c(
   "constraint_idx",
   "capacity_idx"
 )]
-aow3$iso3c <- a0_vect$iso3_code[match(
+aow3$iso3c <- a0_sf_simple$iso3_code[match(
   aow3$gaul0_code,
-  a0_vect$gaul0_code
+  a0_sf_simple$gaul0_code
 )]
 
 aow3 <- subset(aow3, iso3c %in% countries)
@@ -545,9 +544,9 @@ prettyprint_countries(aow3_hotspot_3_2$iso3c)
 ```{r}
 # --- Capacity/Spending ---
 grape_df <- read_parquet("data/results/grape.parquet")
-grape_df$gaul0_code <- a0_vect$gaul0_code[match(
+grape_df$gaul0_code <- a0_sf_simple$gaul0_code[match(
   grape_df$iso3c,
-  a0_vect$iso3_code
+  a0_sf_simple$iso3_code
 )]
 
 grape_df <- subset(grape_df, iso3c %in% countries)
@@ -652,20 +651,6 @@ grape_hotspot_1_2 <- subset(grape_df, bi_class %in% c("2-1", "1-2"))
 prettyprint_countries(grape_hotspot_1_2$iso3c)
 ```
 
-### Methods
-
-The prioritization methodology was based on five dimensions: the Areas of Work
-(AOW1–3), urgency, and local research and development capacity. For each
-dimension, indicators were compiled into composite indexes representing need,
-exposure, constraint, resilience, etc. These which were then used to classify
-countries into ranked groups based on quantiles. The top countries were selected
-from each of these groups and the countries appearing across multiple dimensions
-were counted. The most frequent priority countries across all of these
-dimensions were selected as the primary priority countries. The remaining
-countries became the secondary priority countries. The top 5 countries for AOW 1
-were selected based on high need alongside sufficient infrastructure and human
-capacity. The top countries for AOW 2 and AOW 3 were selected as having the the
-most shocks or constraining factors paired with the lowest capacity to respond.
 
 {{< pagebreak >}}
 

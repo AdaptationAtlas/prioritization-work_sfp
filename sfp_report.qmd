@@ -29,6 +29,8 @@ urgency_data <- read_json("data/urgency.json")
 
 a0_vect_simple <- vect("data/a0_vect_vsimple.topojson")
 a0_sys_area <- read_parquet("data/results/bounds_area.parquet")
+area_lookup <- read_parquet("data/results/mdata_area-lookup.parquet")
+farm_sys <- rast("data/bounds_farmSys.tif")
 
 grape_plt_yr <- read_parquet("./data/results/grape.parquet") |>
   subset(
@@ -298,6 +300,10 @@ constraint_burden <- list(
   list(
     title = "Soil pH",
     source = "SoilGrids"
+  ),
+  list(
+    title = "Green Water Scarcity",
+    source = "He L, Rosa L. Solutions to agricultural green water scarcity under climate change. (2023)"
   )
 )
 format_variable_summary(constraint_burden)
@@ -335,7 +341,6 @@ format_variable_summary(enabling_environment)
 
 ```{r}
 #| include: false
-farm_sys <- rast("data/bounds_farmSys.tif")
 farm_sys_lvl <- levels(farm_sys)[[1]]
 names(farm_sys_lvl) <- c("value", "land_use")
 
@@ -403,8 +408,6 @@ plot_data <- subset(
 #| fig-width: 21
 #| fig-height: 14
 #| fig-align: center
-area_lookup <- read_parquet("data/results/mdata_area-lookup.parquet")
-
 plot_data$area <- area_lookup[
   match(plot_data$id, area_lookup$ID),
   "area_km2_ag"

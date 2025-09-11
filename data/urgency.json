@@ -1,0 +1,78 @@
+{
+  "name": "Urgency Index",
+  "var_name": "urgency_idx",
+  "variables": [
+    {
+      "var_name": "poverty_grdi",
+      "group": "vulnerability",
+      "title": "Poverty (Global Gridded Relative Deprivation Index)",
+      "source": "NASA SEDAC",
+      "path": "grdi_povmap.tif",
+      "thresholds": {
+        "low": 0,
+        "mid": 40,
+        "high": 70
+      },
+      "inverse": false,
+      "agg_stat": "mean"
+    },
+    {
+      "var_name": "education",
+      "group": "vulnerability",
+      "title": "Education Attainment",
+      "source": "University of Washington - IHME",
+      "path": "IHME_eduAttain.tif",
+      "thresholds": {
+        "low": 0,
+        "mid": 6,
+        "high": 10
+      },
+      "inverse": true,
+      "agg_stat": "pixel_area"
+    },
+    {
+      "var_name": "stunting",
+      "group": "vulnerability",
+      "title": "Stunting",
+      "source": "University of Washington - IHME",
+      "path": "IHME_stunting.tif",
+      "thresholds": {
+        "low": 0,
+        "mid": 0.3,
+        "high": 0.5
+      },
+      "inverse": false,
+      "agg_stat": "pixel_area"
+    },
+    {
+      "var_name": "rural_pop_density",
+      "group": "exposure",
+      "title": "Rutal Population Density",
+      "source": "WorldPop & Global Human Settlement Layer",
+      "path": "wpop_rural_pop_density.tif",
+      "thresholds": null,
+      "inverse": false,
+      "agg_stat": "mean"
+    },
+    {
+      "var_name": "total_vop_km2",
+      "group": "exposure",
+      "title": "Value of Production (2010) per km2",
+      "source": "MapSpam",
+      "path": "spam2010V2r0_global_total-vop_km2.tif",
+      "thresholds": null,
+      "inverse": false,
+      "agg_stat": "mean"
+    },
+    {
+      "var_name": "tlu_km2",
+      "group": "exposure",
+      "title": "Livestock Unit per km2",
+      "source": "GLW4 2015",
+      "path": "tlu_km2.tif",
+      "thresholds": null,
+      "inverse": false,
+      "agg_stat": "mean"
+    }
+  ]
+}

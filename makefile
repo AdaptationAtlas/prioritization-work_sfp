@@ -1,5 +1,6 @@
 
 RESULTS_DIR = data/results
+SRC_DIR = src
 
 # R script outputs
 BOUNDS   = $(RESULTS_DIR)/bounds_area.parquet
@@ -18,22 +19,22 @@ QMD_OUTPUTS = country_analysis.pdf sfp_report_REFACTOR.pdf
 all: $(R_OUTPUTS) $(QMD_OUTPUTS)
 
 # Rules for R scripts
-$(BOUNDS): 01_preprocess_bounds.r
+$(BOUNDS): $(SRC_DIR)/01_preprocess_bounds.r
 	Rscript $< -o $@ >/dev/null
 
-$(URGENCY): 02_preprocess_urgency.r $(BOUNDS)
+$(URGENCY): $(SRC_DIR)/02_preprocess_urgency.r $(BOUNDS)
 	Rscript $< -o $@ >/dev/null
 
-$(GRAPE): 03_preprocess_grape.r $(URGENCY)
+$(GRAPE): $(SRC_DIR)/03_preprocess_grape.r $(URGENCY)
 	Rscript $< -o $@ >/dev/null
 
-$(AOW1): 04_preprocess_aow1.r $(GRAPE)
+$(AOW1): $(SRC_DIR)/04_preprocess_aow1.r $(BOUNDS)
 	Rscript $< -o $@ >/dev/null
 
-$(AOW2): 05_preprocess_aow2.r $(AOW1)
+$(AOW2): $(SRC_DIR)/05_preprocess_aow2.r $(BOUNDS)
 	Rscript $< -o $@ >/dev/null
 
-$(AOW3): 06_preprocess_aow3.r $(AOW2)
+$(AOW3): $(SRC_DIR)/06_preprocess_aow3.r $(BOUNDS)
 	Rscript $< -o $@ >/dev/null
 
 country_analysis.pdf: country_analysis.qmd $(R_OUTPUTS)

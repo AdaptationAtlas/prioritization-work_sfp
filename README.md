@@ -14,6 +14,12 @@ without access to the raw data files.
 Two Quarto documents (.qmd) are included and can be rendered without issue, as
 they rely only on the results already present in the repository.
 
+```sh
+quarto render country_analysis.qmd
+# or
+quarto render sfp_report.qmd
+```
+
 > `country_analysis.qmd` contains the final results with countries split into
 > primary and secondary priorities, along with 10 countries for each AOW. It
 > also contains priority zones/groups for each country.

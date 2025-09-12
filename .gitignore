@@ -3,5 +3,7 @@
 data/*
 !data/results/
 !data/results/**
+outputs/*
 sfp_report_files/*
 *.pdf
+.Rproj.user
